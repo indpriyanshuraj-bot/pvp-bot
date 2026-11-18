@@ -1,11 +1,11 @@
 {
 	"format_version": 2,
 	"header": {
-		"name": "PvP Bots v3 RP",
-		"description": "Resources for PvP Bots v3",
+		"name": "pack.name",
+		"description": "pack.description",
 		"uuid": "c9a6f3d8-2e51-4b07-8f34-7d1a5e9c2b46",
-		"version": [3, 0, 0],
+		"version": [3, 0, 1],
 		"min_engine_version": [1, 21, 120]
 	},
-	"modules": [{ "type": "resources", "uuid": "d4b8e1c6-9a27-4f53-b0e6-3c7f2a8d5e91", "version": [3, 0, 0] }]
+	"modules": [{ "type": "resources", "uuid": "d4b8e1c6-9a27-4f53-b0e6-3c7f2a8d5e91", "version": [3, 0, 1] }]
 }

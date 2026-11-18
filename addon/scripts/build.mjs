@@ -10,8 +10,9 @@ rmSync(OUT, { recursive: true, force: true });
 mkdirSync(`${BP}/scripts`, { recursive: true });
 mkdirSync(`${OUT}/RP`, { recursive: true });
 
-cpSync('packs/BP/manifest.json', `${BP}/manifest.json`);
-cpSync('packs/RP/manifest.json', `${OUT}/RP/manifest.json`);
+// Copy the whole pack skeleton so pack_icon.png and texts/ ship too.
+cpSync('packs/BP', BP, { recursive: true });
+cpSync('packs/RP', `${OUT}/RP`, { recursive: true });
 
 // Engine modules are provided by Minecraft at runtime, never bundled.
 const external = ['@minecraft/server', '@minecraft/server-ui', '@minecraft/server-gametest'];

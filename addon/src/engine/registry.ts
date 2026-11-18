@@ -65,6 +65,7 @@ class Registry {
 	private readonly relations = new Relations();
 	private readonly chat = new ChatPolicy();
 	private subscribed = false;
+	private failures = 0;
 
 	add(entity: SimulatedPlayer, pro: ProSettings = DEFAULT_PRO, profileName = 'normal'): void {
 		entity.addTag(BOT_TAG);
@@ -138,6 +139,19 @@ class Registry {
 	private tick(): void {
 		const t0 = Date.now();
 		try {
+			this.tickInner();
+		} catch (err) {
+			this.failures++;
+			if (this.failures === 1 || this.failures % 100 === 0) {
+				console.error(`[PvP Bots v3] tick error #${this.failures}: ${String(err)}`);
+			}
+		} finally {
+			this.governor.record(Date.now() - t0, Date.now());
+		}
+	}
+
+	private tickInner(): void {
+		try {
 			const throttle = this.governor.throttle;
 			const list = this.all().filter((b) => b.entity.isValid);
 			if (list.length === 0) return;
@@ -153,9 +167,16 @@ class Registry {
 			}
 
 			// executing is cheap and must happen every tick for responsiveness
-			for (const b of list) this.act(b);
+			for (const b of list) {
+				// one misbehaving bot must never take down the loop
+				try {
+					this.act(b);
+				} catch {
+					this.failures++;
+				}
+			}
 		} finally {
-			this.governor.record(Date.now() - t0, Date.now());
+			/* measured by the caller */
 		}
 	}
 

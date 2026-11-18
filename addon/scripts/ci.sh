@@ -49,16 +49,47 @@ console.log('  ✓ ESM clean, '+new Set(imports).size+' engine import(s), no Nod
 step "6/7 pack validation"
 node -e "
 const fs=require('fs');
-const m=JSON.parse(fs.readFileSync('dist/BP/manifest.json','utf8'));
 const errs=[];
-if(!m.header?.uuid) errs.push('missing header uuid');
-const script=m.modules?.find(x=>x.type==='script');
-if(!script) errs.push('no script module');
-else if(!fs.existsSync('dist/BP/'+script.entry)) errs.push('entry missing: '+script.entry);
-const deps=(m.dependencies??[]).map(d=>d.module_name);
-for(const need of ['@minecraft/server','@minecraft/server-gametest']) if(!deps.includes(need)) errs.push('missing dep '+need);
-if(errs.length){console.error('  ✗ '+errs.join('; '));process.exit(1)}
-console.log('  ✓ manifest valid, entry present, deps declared');
+const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));
+
+for (const side of ['BP','RP']) {
+  const base='dist/'+side;
+  const mf=base+'/manifest.json';
+  if(!fs.existsSync(mf)){errs.push(side+': manifest missing');continue}
+  const m=JSON.parse(fs.readFileSync(mf,'utf8'));
+  if(m.format_version!==2) errs.push(side+': format_version must be 2');
+  if(!m.header?.uuid) errs.push(side+': header uuid missing');
+  if(!Array.isArray(m.header?.min_engine_version)||m.header.min_engine_version.length!==3)
+    errs.push(side+': min_engine_version must be [a,b,c]');
+  if(!Array.isArray(m.header?.version)||m.header.version.length!==3)
+    errs.push(side+': header version must be [a,b,c]');
+  else if(m.header.version.join('.')!==pkg.version)
+    errs.push(side+': manifest version '+m.header.version.join('.')+' != package '+pkg.version);
+  if(!fs.existsSync(base+'/pack_icon.png')) errs.push(side+': pack_icon.png missing');
+  if(!fs.existsSync(base+'/texts/en_US.lang')) errs.push(side+': texts/en_US.lang missing');
+  if(!fs.existsSync(base+'/texts/languages.json')) errs.push(side+': texts/languages.json missing');
+  if(typeof m.header?.name==='string' && !m.header.name.startsWith('pack.'))
+    errs.push(side+': name should be the pack.name lang key');
+}
+
+const bp=JSON.parse(fs.readFileSync('dist/BP/manifest.json','utf8'));
+const script=bp.modules?.find(x=>x.type==='script');
+if(!script) errs.push('BP: no script module');
+else if(!fs.existsSync('dist/BP/'+script.entry)) errs.push('BP: entry missing '+script.entry);
+
+// Portable dependency versions: stable or the bare 'beta' alias only. A pinned
+// preview like 1.0.0-beta.1.26.70-preview.26 locks the pack to one engine build.
+for (const d of bp.dependencies??[]) {
+  const v=String(d.version);
+  if (v==='beta') continue;
+  if (!/^[0-9]+\.[0-9]+\.[0-9]+$/.test(v))
+    errs.push('BP: dependency '+d.module_name+' version \''+v+'\' is not portable');
+}
+const deps=(bp.dependencies??[]).map(d=>d.module_name);
+for(const need of ['@minecraft/server','@minecraft/server-gametest']) if(!deps.includes(need)) errs.push('BP: missing dep '+need);
+
+if(errs.length){console.error('  ✗ '+errs.join('\n  ✗ '));process.exit(1)}
+console.log('  ✓ manifests, icons, lang files, portable deps, version matches package');
 "; check $? "pack"
 
 step "7/7 gametest inventory"
