@@ -55,7 +55,7 @@ export class TacticBandit {
 	}
 
 	/** Pick a tactic. Returns null when the list is empty. */
-	choose(tactics: readonly string[], features: readonly number[], nowTick: number): string | null {
+	choose(tactics: readonly string[], features: readonly number[]): string | null {
 		if (tactics.length === 0) return null;
 		if (tactics.length === 1) return tactics[0] as string;
 

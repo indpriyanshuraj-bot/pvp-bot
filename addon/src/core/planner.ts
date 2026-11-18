@@ -33,10 +33,6 @@ export function arbiter(i: PlannerInput): ArbiterResult {
 	const b = i.bot;
 	const hpFrac = b.health / Math.max(1, b.maxHealth);
 
-	if (b.effects.includes('minecraft:lava') || b.effects.includes('lava')) {
-		// not a real effect; lava is handled by the survive skill via block state
-	}
-
 	if (b.inWater && hpFrac < 0.35) {
 		return { goal: 'CLUTCH', reason: 'drowning risk at low health' };
 	}

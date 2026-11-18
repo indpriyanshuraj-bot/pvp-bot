@@ -120,11 +120,11 @@ test('L3: choose returns a member of the candidate list', () => {
 	const b = new TacticBandit();
 	const f = new Array(10).fill(1);
 	for (let i = 0; i < 50; i++) {
-		const c = b.choose(['a', 'b', 'c'], f, i);
+		const c = b.choose(['a', 'b', 'c'], f);
 		assert.ok(c === 'a' || c === 'b' || c === 'c');
 	}
 });
 
 test('L3: choose handles an empty list', () => {
-	assert.equal(new TacticBandit().choose([], [], 0), null);
+	assert.equal(new TacticBandit().choose([], []), null);
 });

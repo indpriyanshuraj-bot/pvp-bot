@@ -7,7 +7,6 @@ import type { CapabilitySet, ItemView } from '../types.js';
 import { WEAPONS } from './weapons.js';
 
 const ARMOR_SUFFIX = ['_helmet', '_chestplate', '_leggings', '_boots'];
-const TOOL_PREFIX = ['wooden_', 'stone_', 'iron_', 'golden_', 'diamond_', 'netherite_'];
 
 export function countOf(items: readonly ItemView[], typeId: string): number {
 	let n = 0;
@@ -118,5 +117,7 @@ function isBlockish(typeId: string): boolean {
 		'minecraft:cobweb', 'minecraft:respawn_anchor', 'minecraft:glowstone',
 		'minecraft:end_stone', 'minecraft:deepslate', 'minecraft:andesite',
 	];
-	return PLACEABLE.includes(typeId) || TOOL_PREFIX.some((p) => typeId === p + 'planks');
+	if (PLACEABLE.includes(typeId)) return true;
+	// any wooden planks variant
+	return typeId.endsWith('_planks');
 }

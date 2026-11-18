@@ -30,7 +30,7 @@ import { ChatPolicy } from '../social/chat.js';
 import { Input } from './input.js';
 import { snapshotBot, snapshotTarget } from './snapshot.js';
 import ARCHETYPE from '../data/archetypes.json';
-import type { CombatIntent, Goal, MoveIntent } from '../types.js';
+import type { BotView, CapabilitySet, CombatIntent, Goal, MoveIntent } from '../types.js';
 
 export const BOT_TAG = 'pvpb';
 
@@ -45,6 +45,10 @@ export interface BotState {
 	tactic: string | null;
 	lastAttackTick: number;
 	mine: MineSession | null;
+	/** snapshot captured in think(), reused by act() to avoid per-tick scans */
+	view: BotView | null;
+	caps: CapabilitySet | null;
+	targetEntity: Entity | null;
 	readonly observer: ArchetypeObserver;
 	readonly breakTracker: BreakTracker;
 	lastHotbar: number;
@@ -75,6 +79,9 @@ class Registry {
 			tactic: null,
 			lastAttackTick: -100,
 			mine: null,
+			view: null,
+			caps: null,
+			targetEntity: null,
 			observer: new ArchetypeObserver(),
 			breakTracker: new BreakTracker(),
 			lastHotbar: -999,
@@ -160,6 +167,10 @@ class Registry {
 		const target = targetEntity ? snapshotTarget(targetEntity) : null;
 		if (target && targetEntity) target.distance = distance(view.location, targetEntity.location);
 
+		b.view = view;
+		b.caps = caps;
+		b.targetEntity = targetEntity ?? null;
+
 		// feed the L2 observer from the target's live behaviour
 		if (target) {
 			b.observer.observe(system.currentTick, {
@@ -222,17 +233,20 @@ class Registry {
 	private act(b: BotState): void {
 		if (!b.entity.isValid) return;
 		const throttle = this.governor.throttle;
+		// Reuse the snapshot captured in think(); only the target's position is
+		// re-read, which is a cheap property access rather than a world query.
+		const view = b.view;
+		const caps = b.caps;
+		if (!view || !caps) return;
 
 		if (b.goal === 'FIGHT') {
-			const t = this.findTarget(b);
-			if (!t) {
+			const t = b.targetEntity;
+			if (!t || !t.isValid) {
 				b.input.stop();
 				return;
 			}
-			const view = snapshotBot(b.entity);
 			const target = snapshotTarget(t);
 			target.distance = distance(view.location, t.location);
-			const caps = deriveCapabilities(view.items);
 			const pro = resolvePro(b.pro, throttle.proFactor);
 			const intent = planCombat({
 				bot: view,
@@ -245,20 +259,18 @@ class Registry {
 			});
 			this.applyCombat(b, intent, t);
 
-			if (throttle.chat) this.tryChat(b, view, target);
+			if (throttle.chat) this.tryChat(b, view, target, caps);
 			return;
 		}
 
 		if (b.goal === 'CLUTCH' || b.goal === 'FLEE') {
-			const view = snapshotBot(b.entity);
-			const caps = deriveCapabilities(view.items);
 			const survival = planSurvival(view, caps);
 			if (survival) {
 				this.applySurvival(b, view, survival);
 				return;
 			}
-			const t = this.findTarget(b);
-			if (t) {
+			const t = b.targetEntity;
+			if (t && t.isValid) {
 				this.applyMove(b, planFlee(view, t.location, system.currentTick));
 			} else {
 				b.input.stop();
@@ -267,7 +279,6 @@ class Registry {
 		}
 
 		if (b.goal === 'EAT') {
-			const view = snapshotBot(b.entity);
 			const choice = chooseFood(view.items, view.hunger, view.health, view.maxHealth);
 			if (choice) {
 				b.input.select(choice.slot);
@@ -283,9 +294,8 @@ class Registry {
 			return;
 		}
 
-		const t = this.findTarget(b);
-		if (t) {
-			const view = snapshotBot(b.entity);
+		const t = b.targetEntity;
+		if (t && t.isValid) {
 			const target = snapshotTarget(t);
 			target.distance = distance(view.location, t.location);
 			this.applyMove(b, planHold(view, target));
@@ -296,8 +306,9 @@ class Registry {
 
 	// ── grinding ──────────────────────────────────────────────────────────────
 	private grind(b: BotState): void {
-		const view = snapshotBot(b.entity);
-		const caps = deriveCapabilities(view.items);
+		const view = b.view;
+		const caps = b.caps;
+		if (!view || !caps) return;
 
 		// keep the hotbar tidy when idle
 		if (system.currentTick - b.lastHotbar > 40) {
@@ -316,7 +327,7 @@ class Registry {
 			bot: view,
 			candidates,
 			bestToolTier: caps.bestToolTier,
-			threat: 0,
+			threat: 1 - view.health / Math.max(1, view.maxHealth),
 			blocked: (typeId, pos) => b.breakTracker.isBlocked(typeId, pos),
 		});
 		if (!intent) {
@@ -443,7 +454,12 @@ class Registry {
 		}
 	}
 
-	private tryChat(b: BotState, view: { health: number; maxHealth: number }, target: { name: string; health: number; maxHealth: number; distance: number; shielding: boolean }): void {
+	private tryChat(
+		b: BotState,
+		view: { health: number; maxHealth: number },
+		target: { name: string; health: number; maxHealth: number; distance: number; shielding: boolean },
+		caps: { bestWeapon: { typeId: string } | null },
+	): void {
 		const line = this.chat.maybeSayAny(
 			{
 				targetName: target.name,
@@ -451,7 +467,7 @@ class Registry {
 				targetMaxHealth: target.maxHealth,
 				myHealth: view.health,
 				myMaxHealth: view.maxHealth,
-				myWeapon: 'minecraft:sword',
+				myWeapon: caps.bestWeapon?.typeId ?? 'fists',
 				distance: target.distance,
 				targetShielding: target.shielding,
 			},
@@ -503,6 +519,22 @@ class Registry {
 		if (intent.lookAt) b.input.lookAt(intent.lookAt);
 		b.input.move(intent.forward, intent.strafe);
 		if (intent.jump) b.input.jump();
+		this.noteMovement(b, intent.forward !== 0 || intent.strafe !== 0);
+	}
+
+	/**
+	 * If the bot has been trying to move without going anywhere, hop — the usual
+	 * cause is a one-block lip it cannot step up.
+	 */
+	private noteMovement(b: BotState, trying: boolean): void {
+		try {
+			const pos = b.entity.location;
+			if (this.stuck.sample(b.entity.id, pos, system.currentTick, trying)) {
+				b.input.jump();
+			}
+		} catch {
+			/* entity gone */
+		}
 	}
 
 	private applyCombat(b: BotState, intent: CombatIntent, target: { location: { x: number; y: number; z: number } }): void {
@@ -511,6 +543,7 @@ class Registry {
 		if (intent.move) {
 			b.input.move(intent.move.forward, intent.move.strafe);
 			if (intent.move.jump) b.input.jump();
+			this.noteMovement(b, intent.move.forward !== 0 || intent.move.strafe !== 0);
 		}
 		if (intent.switchSlot !== null) b.input.select(intent.switchSlot);
 		if (intent.useSlot !== null) {
@@ -523,25 +556,6 @@ class Registry {
 		}
 	}
 
-	private findFoodSlot(b: BotState): number {
-		try {
-			const inv = b.entity.getComponent('minecraft:inventory');
-			const container = inv?.container;
-			if (!container) return -1;
-			for (let i = 0; i < container.size; i++) {
-				const stack = container.getItem(i);
-				if (!stack) continue;
-				try {
-					if (stack.getComponent('minecraft:food')) return i;
-				} catch {
-					/* not food */
-				}
-			}
-		} catch {
-			/* no inventory */
-		}
-		return -1;
-	}
 
 	private findTarget(b: BotState): Entity | undefined {
 		try {

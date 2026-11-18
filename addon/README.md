@@ -41,8 +41,19 @@ npm install
 bash scripts/ci.sh
 ```
 
-Six gates: typecheck against the real `@minecraft/server` 2.11.0 definitions,
-purity check, unit tests, esbuild bundle, pack validation, gametest inventory.
+Seven gates, and the gates themselves are tested:
+
+1. typecheck — real `@minecraft/server` 2.11.0 types, strict, **no unused code**
+2. purity — the testable core must not import the engine or `/engine/`
+3. unit tests
+4. esbuild bundle
+5. bundle portability — valid ESM, no `node:` / `require` / `process` / `__dirname`,
+   and no imports beyond the three allowed `@minecraft/*` modules
+6. pack validation — manifest UUID, script module, entry file present, deps declared
+7. gametest inventory
+
+Gates 1 and 4 abort the run on failure, because gates 5–6 validate build artifacts
+and must never pass against a stale `dist/`.
 
 ### What CI can and cannot catch
 
