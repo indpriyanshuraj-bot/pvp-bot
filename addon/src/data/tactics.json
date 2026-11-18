@@ -1,0 +1,12 @@
+{
+	"sword_trade": { "requires": ["sword>0"], "base": 50, "risk": 0.3, "cost": "none", "skill": "combat.sword" },
+	"axe_shieldbreak": { "requires": ["axe>0"], "base": 60, "risk": 0.35, "cost": "none", "skill": "combat.axe" },
+	"shield_hold": { "requires": ["shield"], "base": 45, "risk": 0.15, "cost": "none", "skill": "combat.shield" },
+	"mace_smash": { "requires": ["mace>0"], "base": 75, "risk": 0.6, "cost": "none", "skill": "combat.mace" },
+	"crystal_pvp": { "requires": ["crystal>0", "obsidian>0"], "base": 70, "risk": 0.7, "cost": "crystal", "skill": "combat.crystal" },
+	"anchor_pvp": { "requires": ["anchor>0", "glowstone>0"], "dimension": ["nether"], "base": 85, "risk": 0.5, "cost": "anchor", "skill": "combat.anchor" },
+	"bed_bomb": { "requires": ["bed>0"], "dimension": ["nether", "end"], "base": 80, "risk": 0.6, "cost": "bed", "skill": "combat.bed" },
+	"riptide": { "requires": ["trident>0"], "needsWater": true, "base": 65, "risk": 0.4, "cost": "none", "skill": "combat.riptide" },
+	"bow_pressure": { "requires": ["bow>0", "arrows>0"], "base": 55, "risk": 0.25, "cost": "arrow", "skill": "combat.bow" },
+	"pearl_in": { "requires": ["pearl>0"], "base": 48, "risk": 0.45, "cost": "pearl", "skill": "move.pearl" }
+}

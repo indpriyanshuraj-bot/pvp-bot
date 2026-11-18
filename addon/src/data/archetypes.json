@@ -1,0 +1,18 @@
+{
+	"centroids": {
+		"rusher": { "attackRate": 2.6, "shieldTimePct": 0.1, "preferredDistance": 2.5, "jumpRate": 0.8, "pearlRate": 0.2, "crystalRate": 0, "potionRate": 0.1, "retreatHp": 4, "elytraUse": 0, "axeShare": 0.2 },
+		"turtle": { "attackRate": 0.6, "shieldTimePct": 0.65, "preferredDistance": 3.5, "jumpRate": 0.2, "pearlRate": 0.1, "crystalRate": 0, "potionRate": 0.3, "retreatHp": 12, "elytraUse": 0, "axeShare": 0.1 },
+		"crystal_camper": { "attackRate": 0.9, "shieldTimePct": 0.25, "preferredDistance": 5, "jumpRate": 0.4, "pearlRate": 0.3, "crystalRate": 1.6, "potionRate": 0.2, "retreatHp": 9, "elytraUse": 0, "axeShare": 0.05 },
+		"potion_hoarder": { "attackRate": 0.7, "shieldTimePct": 0.3, "preferredDistance": 6, "jumpRate": 0.2, "pearlRate": 0.2, "crystalRate": 0, "potionRate": 1.4, "retreatHp": 14, "elytraUse": 0, "axeShare": 0.1 },
+		"mace_diver": { "attackRate": 1.4, "shieldTimePct": 0.15, "preferredDistance": 3, "jumpRate": 1.8, "pearlRate": 0.4, "crystalRate": 0, "potionRate": 0.2, "retreatHp": 8, "elytraUse": 0.8, "axeShare": 0.1 },
+		"axe_spammer": { "attackRate": 2.2, "shieldTimePct": 0.05, "preferredDistance": 2.8, "jumpRate": 0.5, "pearlRate": 0.1, "crystalRate": 0, "potionRate": 0.1, "retreatHp": 5, "elytraUse": 0, "axeShare": 0.9 }
+	},
+	"counters": {
+		"rusher": { "axe_shieldbreak": 1.4, "shield_hold": 1.3, "crystal_pvp": 0.6 },
+		"turtle": { "axe_shieldbreak": 1.8, "crystal_pvp": 1.2, "sword_trade": 0.7 },
+		"crystal_camper": { "bow_pressure": 1.6, "pearl_in": 1.5, "sword_trade": 0.5 },
+		"potion_hoarder": { "axe_shieldbreak": 1.3, "bow_pressure": 1.2 },
+		"mace_diver": { "shield_hold": 1.5, "bow_pressure": 1.3, "mace_smash": 0.5 },
+		"axe_spammer": { "shield_hold": 1.6, "sword_trade": 1.2 }
+	}
+}

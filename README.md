@@ -18,6 +18,7 @@ change before a new addon is built. `main` is untouched.
 | `reference/v2.9/README.md` | How the deobfuscation was done and what was validated |
 | `dist/` | Rebuilt `.mcaddon` (readable source) and the source archive |
 | `tools/` | The deobfuscation and validation scripts used to produce `reference/v2.9/` |
+| `addon/` | **v3 addon source** — TypeScript, bundled to a behaviour pack, with offline tests and in-game gametests |
 
 ## Headline findings
 
@@ -32,4 +33,6 @@ change before a new addon is built. `main` is untouched.
 - [x] Recover and audit v2.9
 - [ ] Compatibility pass on the recovered source
 - [x] Plan v3 architecture (`docs/PLAN.md`)
-- [ ] Build the new addon
+- [x] Decide systems (`docs/DECISIONS.md`)
+- [x] Build phase 0–1: toolchain, controls, perception, planner, governor, break detection, NLP, all three learning levels
+- [ ] Build phases 2–11 (movement, combat tactics, grind, inventory, survival, social, pro GUI polish)

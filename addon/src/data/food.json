@@ -1,0 +1,8 @@
+{
+	"minecraft:pufferfish": { "effects": ["poison", "nausea", "hunger"], "risk": "high" },
+	"minecraft:spider_eye": { "effects": ["poison"], "risk": "medium" },
+	"minecraft:poisonous_potato": { "effects": ["poison"], "risk": "medium" },
+	"minecraft:rotten_flesh": { "effects": ["hunger"], "risk": "low" },
+	"minecraft:chicken": { "effects": ["hunger"], "risk": "low" },
+	"minecraft:suspicious_stew": { "effects": ["variable"], "risk": "medium" }
+}

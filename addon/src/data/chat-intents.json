@@ -1,0 +1,8 @@
+{
+	"challenge": { "kw": { "duel": 3, "fight": 2, "come": 1, "vs": 2, "beat": 2 }, "reply": ["accept", "decline"] },
+	"insult": { "kw": { "noob": 2, "easy": 2, "trash": 2, "bad": 1, "bot": 2, "suck": 2 }, "reply": ["ignore", "taunt"] },
+	"ask_help": { "kw": { "help": 3, "how": 2, "what": 1, "need": 1 }, "reply": ["explain"] },
+	"greet": { "kw": { "hi": 3, "hello": 3, "yo": 2, "sup": 2, "hey": 2 }, "reply": ["greet"] },
+	"ask_where": { "kw": { "where": 3, "coords": 2, "located": 1 }, "reply": ["where"] },
+	"trade": { "kw": { "trade": 3, "give": 2, "swap": 2, "offer": 1 }, "reply": ["trade"] }
+}
