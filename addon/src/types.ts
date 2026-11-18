@@ -35,6 +35,8 @@ export interface BotView {
 	location: Vector3Like;
 	view: Vector3Like;
 	onGround: boolean;
+	/** vertical velocity; negative while falling (needed for crit detection) */
+	velocityY: number;
 	inWater: boolean;
 	effects: string[];
 	gameMode: 'Survival' | 'Creative' | 'Adventure' | 'Spectator';
@@ -48,6 +50,7 @@ export interface TargetView {
 	health: number;
 	maxHealth: number;
 	distance: number;
+	location: Vector3Like;
 	isPlayer: boolean;
 	sprinting: boolean;
 	airborne: boolean;
@@ -87,4 +90,24 @@ export interface ScoredGoal {
 	goal: Goal;
 	score: number;
 	reason: string;
+}
+
+/** What the bot wants to do with its body this tick. */
+export interface MoveIntent {
+	forward: number;
+	strafe: number;
+	jump: boolean;
+	lookAt: Vector3Like | null;
+}
+
+/** What the bot wants to do with its hands this tick. */
+export interface CombatIntent {
+	attack: boolean;
+	lookAt: Vector3Like | null;
+	move: MoveIntent | null;
+	/** hotbar slot to select, or null */
+	switchSlot: number | null;
+	/** hotbar slot to activate (eat/drink/place), or null */
+	useSlot: number | null;
+	shield: boolean;
 }

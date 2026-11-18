@@ -22,7 +22,7 @@ function bot(over: Partial<BotView> = {}): BotView {
 	return {
 		id: 'b1', name: 'bot', health: 20, maxHealth: 20, hunger: 20, saturation: 5,
 		location: { x: 0, y: 64, z: 0 }, view: { x: 0, y: 0, z: 1 },
-		onGround: true, inWater: false, effects: [], gameMode: 'Survival',
+		onGround: true, velocityY: 0, inWater: false, effects: [], gameMode: 'Survival',
 		selectedSlot: 0, items: [],
 		...over,
 	};
@@ -31,6 +31,7 @@ function bot(over: Partial<BotView> = {}): BotView {
 function target(over: Partial<TargetView> = {}): TargetView {
 	return {
 		id: 'p1', name: 'Steve', health: 20, maxHealth: 20, distance: 3,
+		location: { x: 3, y: 64, z: 0 },
 		isPlayer: true, sprinting: false, airborne: false, shielding: false,
 		heldTypeId: 'minecraft:iron_sword', gameMode: 'Survival',
 		...over,

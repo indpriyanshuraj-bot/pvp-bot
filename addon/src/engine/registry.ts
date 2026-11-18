@@ -11,9 +11,15 @@ import { chooseGoal, type PlannerInput } from '../core/planner.js';
 import { deriveCapabilities } from '../core/capabilities.js';
 import { DEFAULT_PRO, resolvePro, type ProSettings } from '../core/pro.js';
 import { OpponentModel } from '../learn/opponent.js';
+import { TacticBandit } from '../learn/bandit.js';
+import { classifyArchetype, counterWeights, type Distribution } from '../learn/archetype.js';
+import { combatFeatures } from '../learn/features.js';
+import { selectTactic, planCombat, type TacticContext } from '../skills/combat.js';
+import { planFlee, planHold, StuckDetector } from '../skills/move.js';
 import { Input } from './input.js';
 import { snapshotBot, snapshotTarget } from './snapshot.js';
-import type { Goal, TargetView } from '../types.js';
+import ARCHETYPE from '../data/archetypes.json';
+import type { CombatIntent, Goal, MoveIntent } from '../types.js';
 
 export const BOT_TAG = 'pvpb';
 
@@ -24,6 +30,9 @@ export interface BotState {
 	pro: ProSettings;
 	lastThink: number;
 	opponent: OpponentModel;
+	archetype: Distribution;
+	tactic: string | null;
+	lastAttackTick: number;
 	profileName: string;
 }
 
@@ -32,6 +41,8 @@ class Registry {
 	readonly governor = new Governor();
 	private cursor = 0;
 	private started = false;
+	private readonly bandit = new TacticBandit();
+	private readonly stuck = new StuckDetector();
 
 	add(entity: SimulatedPlayer, pro: ProSettings = DEFAULT_PRO, profileName = 'normal'): void {
 		entity.addTag(BOT_TAG);
@@ -42,6 +53,9 @@ class Registry {
 			pro,
 			lastThink: -999,
 			opponent: new OpponentModel(),
+			archetype: {},
+			tactic: null,
+			lastAttackTick: -100,
 			profileName,
 		});
 	}
@@ -98,9 +112,7 @@ class Registry {
 		const caps = deriveCapabilities(view.items);
 		const targetEntity = this.findTarget(b);
 		const target = targetEntity ? snapshotTarget(targetEntity) : null;
-		if (target && targetEntity) {
-			target.distance = distance(view.location, targetEntity.location);
-		}
+		if (target && targetEntity) target.distance = distance(view.location, targetEntity.location);
 
 		const input: PlannerInput = {
 			bot: view,
@@ -116,39 +128,119 @@ class Registry {
 
 		const { goal } = chooseGoal(input, b.goal);
 		b.goal = goal;
+
+		// Pick a tactic only when there is something to fight.
+		if (goal === 'FIGHT' && target) {
+			const pro = resolvePro(b.pro, this.governor.throttle.proFactor);
+			const features = combatFeatures(view, target, caps.bestWeapon?.damage ?? 0);
+			const ctx: TacticContext = {
+				caps,
+				pro,
+				dimension: view.location ? this.dimensionName(b) : 'overworld',
+				inWater: view.inWater,
+				isRaining: false,
+				opponentSkill: b.opponent.skill(),
+				counters: counterWeights(b.archetype, ARCHETYPE.counters as unknown as Record<string, Record<string, number>>),
+				learned: (t) => (this.governor.throttle.learn ? this.bandit.bonus(t, features) : 0),
+			};
+			b.tactic = selectTactic(ctx);
+		} else {
+			b.tactic = null;
+		}
+	}
+
+	private dimensionName(b: BotState): string {
+		try {
+			const id = b.entity.dimension.id.replace('minecraft:', '');
+			return id;
+		} catch {
+			return 'overworld';
+		}
 	}
 
 	private act(b: BotState): void {
 		if (!b.entity.isValid) return;
-		switch (b.goal) {
-			case 'FIGHT': {
-				const t = this.findTarget(b);
-				if (!t) {
-					b.input.stop();
-					return;
-				}
-				b.input.lookAt(t.location);
-				const d = distance(b.entity.location, t.location);
-				if (d > 3.2) {
-					b.input.move(1);
-				} else {
-					b.input.stop();
-					b.input.attack(t, 12);
-				}
-				return;
-			}
-			case 'EAT': {
-				const foodSlot = this.findFoodSlot(b);
-				if (foodSlot >= 0) {
-					b.input.select(foodSlot);
-					b.input.use();
-				} else {
-					b.input.stop();
-				}
-				return;
-			}
-			default:
+		const throttle = this.governor.throttle;
+
+		if (b.goal === 'FIGHT') {
+			const t = this.findTarget(b);
+			if (!t) {
 				b.input.stop();
+				return;
+			}
+			const view = snapshotBot(b.entity);
+			const target = snapshotTarget(t);
+			target.distance = distance(view.location, t.location);
+			const caps = deriveCapabilities(view.items);
+			const pro = resolvePro(b.pro, throttle.proFactor);
+			const intent = planCombat({
+				bot: view,
+				target,
+				caps,
+				pro,
+				tactic: b.tactic ?? 'sword_trade',
+				nowTick: system.currentTick,
+				lastAttackTick: b.lastAttackTick,
+			});
+			this.applyCombat(b, intent, t);
+			return;
+		}
+
+		if (b.goal === 'FLEE' || b.goal === 'CLUTCH') {
+			const t = this.findTarget(b);
+			const view = snapshotBot(b.entity);
+			if (t) {
+				const intent = planFlee(view, t.location, system.currentTick);
+				this.applyMove(b, intent);
+			} else {
+				b.input.stop();
+			}
+			return;
+		}
+
+		if (b.goal === 'EAT') {
+			const foodSlot = this.findFoodSlot(b);
+			if (foodSlot >= 0) {
+				b.input.select(foodSlot);
+				b.input.use();
+			} else {
+				b.input.stop();
+			}
+			return;
+		}
+
+		const t = this.findTarget(b);
+		if (t) {
+			const view = snapshotBot(b.entity);
+			const target = snapshotTarget(t);
+			target.distance = distance(view.location, t.location);
+			this.applyMove(b, planHold(view, target));
+		} else {
+			b.input.stop();
+		}
+	}
+
+	private applyMove(b: BotState, intent: MoveIntent): void {
+		if (intent.lookAt) b.input.lookAt(intent.lookAt);
+		b.input.move(intent.forward, intent.strafe);
+		if (intent.jump) b.input.jump();
+	}
+
+	private applyCombat(b: BotState, intent: CombatIntent, target: { location: { x: number; y: number; z: number } }): void {
+		void target;
+		if (intent.lookAt) b.input.lookAt(intent.lookAt);
+		if (intent.move) {
+			b.input.move(intent.move.forward, intent.move.strafe);
+			if (intent.move.jump) b.input.jump();
+		}
+		if (intent.switchSlot !== null) b.input.select(intent.switchSlot);
+		if (intent.useSlot !== null) {
+			b.input.select(intent.useSlot);
+			b.input.use();
+		}
+		if (intent.attack) {
+			const t = this.findTarget(b);
+			if (t && b.input.attack(t, 0)) b.lastAttackTick = system.currentTick;
 		}
 	}
 
