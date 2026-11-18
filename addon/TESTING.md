@@ -22,9 +22,16 @@ integration bugs — that is the point of it.
 
 2. Create a test world with:
    - **Beta APIs** experiment **ON** — required, `@minecraft/server-gametest` has
-     no stable release
+     no stable release. This works on the **normal release build** of Minecraft;
+     you do **not** need the Preview app.
    - **Cheats ON**
    - Difficulty: Normal, or anything; it does not matter for the bot logic
+
+   To turn it on: *Create New World → Experiments → scroll to **Beta APIs** → on*.
+   For an existing world: *Edit world → Experiments*.
+
+   The pack ships **no resource pack** — it is a behaviour pack only, so you
+   activate it under *Behaviour Packs*, not *Resource Packs*.
 
 3. Install the pack, enable it on the world, load in.
 
@@ -244,7 +251,71 @@ bug.
 
 ---
 
-## 6. Reporting a problem usefully
+## 6. Troubleshooting: version errors
+
+There are three completely different errors that all look like "version
+problems". Which one you get tells you what to fix.
+
+### 6.1 `unsupported version: no parser available for version X`
+
+Example: `[Lighting][error]-unsupported version: no parser available for version 1.26.30`
+
+**This is not about the pack's `min_engine_version`, and not about script module
+versions.** It comes from a *subsystem parser* — note the bracketed prefix
+(`[Lighting]`, `[Blocks]`, `[Textures]`) telling you which one — that tried to
+read a JSON file declaring a `format_version` it has no parser for.
+
+**It cannot come from this pack.** The pack contains no content JSON at all:
+just `manifest.json` (`format_version: 2`), `texts/languages.json` (an array), and
+`.lang` files. There is nothing in it that declares a game format version.
+
+If you see this with only this pack installed, the source is another pack in that
+world, or vanilla content — not this add-on.
+
+**To confirm quickly:** create a brand-new world, enable *only* this pack, and
+load it. If the error is gone, it came from the other world's packs.
+
+### 6.2 `Unsupported version` / the pack will not import at all
+
+This one *is* the manifest. Either:
+- `min_engine_version` is **higher** than your game version, or
+- a dependency requests a module version your engine does not ship.
+
+This pack declares `min_engine_version: [1, 21, 90]` and dependencies
+`@minecraft/server 2.0.0`, `@minecraft/server-ui 2.0.0`,
+`@minecraft/server-gametest beta`. All of those are satisfied by any 2.x engine,
+so import should succeed on 1.21.90 and later.
+
+If it still refuses, delete any previously imported copy of "PvP Bots v3" from
+*Settings → Storage* first — a duplicate UUID blocks the import.
+
+### 6.3 The world loads but no `pvb:` commands exist
+
+The script module did not load. In order of likelihood:
+
+1. **Beta APIs is off.** `@minecraft/server-gametest` only exists as a beta
+   module; without the experiment the whole script fails to import.
+2. **You activated the pack as a resource pack.** It is a behaviour pack.
+3. **Scripting is disabled** on the world (server setting).
+
+Check the content log — there will be a red `[Scripting]` error naming the cause.
+Turn on *Settings → Creator → Enable Content Log GUI* to read it in-game.
+
+### 6.4 Reading the content log
+
+Enable the Content Log GUI, then reproduce. The prefix in brackets is the
+subsystem, and that is the single most useful piece of information:
+
+| Prefix | Means |
+|---|---|
+| `[Scripting]` | our JavaScript — a real bug, send it to me |
+| `[Lighting]` / `[Textures]` | a resource pack (we ship none) |
+| `[Blocks]` / `[Items]` / `[Entity]` | content JSON (we ship none) |
+| `[Pack]` | manifest / import problem — see 6.2 |
+
+---
+
+## 7. Reporting a problem usefully
 
 For anything that fails, this is what makes it fixable in one pass:
 

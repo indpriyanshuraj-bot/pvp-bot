@@ -4,17 +4,17 @@
 		"name": "pack.name",
 		"description": "pack.description",
 		"uuid": "3f2b9c41-7d18-4a6e-9b05-1c8e4f7a2d63",
-		"version": [3, 0, 1],
-		"min_engine_version": [1, 21, 120]
+		"version": [3, 0, 2],
+		"min_engine_version": [1, 21, 90]
 	},
 	"modules": [
-		{ "type": "data", "uuid": "a1d4e7f2-6b39-4c85-8e21-5f0a9d3b7c14", "version": [3, 0, 1] },
+		{ "type": "data", "uuid": "a1d4e7f2-6b39-4c85-8e21-5f0a9d3b7c14", "version": [3, 0, 2] },
 		{
 			"type": "script",
 			"language": "javascript",
 			"uuid": "b7e2c5a9-3f46-4d71-9a08-2e6b1c4f8d35",
 			"entry": "scripts/main.js",
-			"version": [3, 0, 1]
+			"version": [3, 0, 2]
 		}
 	],
 	"dependencies": [

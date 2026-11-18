@@ -52,7 +52,11 @@ const fs=require('fs');
 const errs=[];
 const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));
 
-for (const side of ['BP','RP']) {
+// Validate every pack folder that was actually built (BP only today; the loop
+// keeps working if a resource pack is added back later).
+const sides=fs.readdirSync('dist').filter(d=>fs.existsSync('dist/'+d+'/manifest.json'));
+if(sides.length===0) errs.push('no pack folders built');
+for (const side of sides) {
   const base='dist/'+side;
   const mf=base+'/manifest.json';
   if(!fs.existsSync(mf)){errs.push(side+': manifest missing');continue}

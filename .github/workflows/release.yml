@@ -62,7 +62,7 @@ jobs:
             TAG="v${VERSION}-b${GITHUB_RUN_NUMBER}"
           fi
 
-          ARTIFACT=$(ls pack/*.mcaddon)
+          ARTIFACT=$(ls pack/*.mcpack pack/*.mcaddon 2>/dev/null | head -1)
           echo "Publishing ${TAG} with ${ARTIFACT}"
 
           git tag -a "${TAG}" -m "Automated release ${TAG} from ${GITHUB_SHA}"
@@ -75,8 +75,8 @@ jobs:
           All seven CI gates passed: typecheck, purity, unit tests, bundle,
           ESM portability, pack validation, gametest inventory.
 
-          **Install:** download the \`.mcaddon\` below and open it, or drop it into
-          a world. Requires the **Beta APIs** experiment to be enabled.
+          **Install:** download the \`.mcpack\` below and open it, or drop it into
+          a world. Requires the **Beta APIs** experiment to be enabled (works on the normal release build, no Preview needed).
 
           **Test it:** see \`addon/TESTING.md\` for the command-by-command guide.
           NOTES
