@@ -1,16 +1,76 @@
 {
-	"minecraft:stone": { "baseTicks": 8, "requiredTier": 1 },
-	"minecraft:cobblestone": { "baseTicks": 8, "requiredTier": 1 },
-	"minecraft:deepslate": { "baseTicks": 12, "requiredTier": 1 },
-	"minecraft:iron_ore": { "baseTicks": 15, "requiredTier": 2 },
-	"minecraft:deepslate_iron_ore": { "baseTicks": 18, "requiredTier": 2 },
-	"minecraft:gold_ore": { "baseTicks": 15, "requiredTier": 3 },
-	"minecraft:diamond_ore": { "baseTicks": 20, "requiredTier": 3 },
-	"minecraft:deepslate_diamond_ore": { "baseTicks": 24, "requiredTier": 3 },
-	"minecraft:obsidian": { "baseTicks": 120, "requiredTier": 4 },
-	"minecraft:ancient_debris": { "baseTicks": 80, "requiredTier": 4 },
-	"minecraft:bedrock": { "baseTicks": 9999, "requiredTier": 5, "unbreakable": true },
-	"minecraft:barrier": { "baseTicks": 9999, "requiredTier": 5, "unbreakable": true },
-	"minecraft:command_block": { "baseTicks": 9999, "requiredTier": 5, "unbreakable": true },
-	"minecraft:end_portal_frame": { "baseTicks": 9999, "requiredTier": 5, "unbreakable": true }
+	"minecraft:stone": {
+		"baseTicks": 8,
+		"requiredTier": 1,
+		"value": 1
+	},
+	"minecraft:cobblestone": {
+		"baseTicks": 8,
+		"requiredTier": 1,
+		"value": 1
+	},
+	"minecraft:deepslate": {
+		"baseTicks": 12,
+		"requiredTier": 1,
+		"value": 1
+	},
+	"minecraft:iron_ore": {
+		"baseTicks": 15,
+		"requiredTier": 2,
+		"value": 6
+	},
+	"minecraft:deepslate_iron_ore": {
+		"baseTicks": 18,
+		"requiredTier": 2,
+		"value": 7
+	},
+	"minecraft:gold_ore": {
+		"baseTicks": 15,
+		"requiredTier": 3,
+		"value": 8
+	},
+	"minecraft:diamond_ore": {
+		"baseTicks": 20,
+		"requiredTier": 3,
+		"value": 20
+	},
+	"minecraft:deepslate_diamond_ore": {
+		"baseTicks": 24,
+		"requiredTier": 3,
+		"value": 22
+	},
+	"minecraft:obsidian": {
+		"baseTicks": 120,
+		"requiredTier": 4,
+		"value": 3
+	},
+	"minecraft:ancient_debris": {
+		"baseTicks": 80,
+		"requiredTier": 4,
+		"value": 30
+	},
+	"minecraft:bedrock": {
+		"baseTicks": 9999,
+		"requiredTier": 5,
+		"unbreakable": true,
+		"value": 0
+	},
+	"minecraft:barrier": {
+		"baseTicks": 9999,
+		"requiredTier": 5,
+		"unbreakable": true,
+		"value": 0
+	},
+	"minecraft:command_block": {
+		"baseTicks": 9999,
+		"requiredTier": 5,
+		"unbreakable": true,
+		"value": 0
+	},
+	"minecraft:end_portal_frame": {
+		"baseTicks": 9999,
+		"requiredTier": 5,
+		"unbreakable": true,
+		"value": 0
+	}
 }

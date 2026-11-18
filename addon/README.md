@@ -76,10 +76,23 @@ Phases 0–3 are built:
 
 - **consumption**: risk-tiered food choice, potion lookup by need, milk gating
 - **survival**: falling / burning / drowning / low-health ladder with slot lookup
+- **inventory**: fixed hotbar layout with stable swap planning, shulker risk gate
+- **grinding**: value-per-distance block selection, tool-tier and hunger gates,
+  and the break classifier driving real mining attempts
 
-Not yet built: grinding, inventory management, outbound chat, and the archetype
-observer that feeds L2 live data (the counter table is wired but `b.archetype`
-stays empty until phase 10).
+Not yet built: outbound chat, container/shulker execution (the gate is decided,
+the block placement is not), and the archetype observer that feeds L2 live data
+(the counter table is wired but `b.archetype` stays empty until phase 10).
+
+### Grinding and the unbreakable probe
+
+`selectBlock` scores `value × 10 / (1 + distance)` damped by threat, skipping
+anything the tool cannot harvest, vanilla unbreakables, and session-blacklisted
+positions. An attempt runs through `beginMining` → `evaluateMining`, which is the
+six-verdict classifier from `breakDetect`: a block that will not break with the
+right tool, no fatigue and past timeout asks for **one retry** before being
+declared `UNBREAKABLE`, and two confirmations at different positions are needed
+before the type is blacklisted. That is the empirical detection for protected maps.
 
 ### Food risk, in one paragraph
 

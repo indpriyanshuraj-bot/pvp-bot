@@ -18,6 +18,12 @@ import { selectTactic, planCombat, type TacticContext } from '../skills/combat.j
 import { planFlee, planHold, StuckDetector } from '../skills/move.js';
 import { planSurvival } from '../skills/survive.js';
 import { chooseFood } from '../skills/consume.js';
+import {
+	planGrind, beginMining, evaluateMining, ruleFor, BLOCK_TABLE,
+	type BlockCandidate, type MineSession,
+} from '../skills/grind.js';
+import { BreakTracker } from '../skills/breakDetect.js';
+import { planHotbar } from '../skills/inventory.js';
 import { Input } from './input.js';
 import { snapshotBot, snapshotTarget } from './snapshot.js';
 import ARCHETYPE from '../data/archetypes.json';
@@ -35,6 +41,9 @@ export interface BotState {
 	archetype: Distribution;
 	tactic: string | null;
 	lastAttackTick: number;
+	mine: MineSession | null;
+	readonly breakTracker: BreakTracker;
+	lastHotbar: number;
 	profileName: string;
 }
 
@@ -58,6 +67,9 @@ class Registry {
 			archetype: {},
 			tactic: null,
 			lastAttackTick: -100,
+			mine: null,
+			breakTracker: new BreakTracker(),
+			lastHotbar: -999,
 			profileName,
 		});
 	}
@@ -217,6 +229,11 @@ class Registry {
 			return;
 		}
 
+		if (b.goal === 'GRIND') {
+			this.grind(b);
+			return;
+		}
+
 		const t = this.findTarget(b);
 		if (t) {
 			const view = snapshotBot(b.entity);
@@ -225,6 +242,155 @@ class Registry {
 			this.applyMove(b, planHold(view, target));
 		} else {
 			b.input.stop();
+		}
+	}
+
+	// ── grinding ──────────────────────────────────────────────────────────────
+	private grind(b: BotState): void {
+		const view = snapshotBot(b.entity);
+		const caps = deriveCapabilities(view.items);
+
+		// keep the hotbar tidy when idle
+		if (system.currentTick - b.lastHotbar > 40) {
+			b.lastHotbar = system.currentTick;
+			this.applyHotbar(b);
+		}
+
+		// finish an in-flight attempt first
+		if (b.mine) {
+			this.pollMining(b);
+			return;
+		}
+
+		const candidates = this.scanBlocks(b);
+		const intent = planGrind({
+			bot: view,
+			candidates,
+			bestToolTier: caps.bestToolTier,
+			threat: 0,
+			blocked: (typeId, pos) => b.breakTracker.isBlocked(typeId, pos),
+		});
+		if (!intent) {
+			b.input.stop();
+			return;
+		}
+
+		if (!intent.inRange) {
+			// walk toward the block
+			const dx = intent.target.pos.x + 0.5 - view.location.x;
+			const dz = intent.target.pos.z + 0.5 - view.location.z;
+			const yaw = Math.atan2(view.view.x, view.view.z);
+			const forward = dx * Math.sin(yaw) + dz * Math.cos(yaw);
+			const strafe = dx * Math.cos(yaw) - dz * Math.sin(yaw);
+			const len = Math.hypot(forward, strafe) || 1;
+			b.input.move(forward / len, strafe / len);
+			return;
+		}
+
+		const rule = ruleFor(intent.target.typeId);
+		if (!rule) return;
+		b.mine = beginMining(
+			intent.target.typeId,
+			intent.target.pos,
+			rule,
+			caps.bestToolTier,
+			system.currentTick,
+		);
+		try {
+			b.entity.breakBlock(intent.target.pos);
+		} catch {
+			b.mine = null;
+		}
+	}
+
+	private pollMining(b: BotState): void {
+		const s = b.mine;
+		if (!s) return;
+		let block: { typeId: string } | undefined;
+		try {
+			block = b.entity.dimension.getBlock(s.pos);
+		} catch {
+			b.mine = null;
+			return;
+		}
+
+		const view = snapshotBot(b.entity);
+		const hasFatigue = view.effects.some((e) => e.includes('mining_fatigue'));
+		const verdict = evaluateMining(
+			s,
+			{
+				same: block?.typeId === s.typeId,
+				changed: !block || block.typeId !== s.typeId,
+				reappeared: false,
+				hasFatigue,
+				gameMode: view.gameMode,
+			},
+			system.currentTick,
+		);
+
+		switch (verdict) {
+			case 'SUCCESS':
+				b.mine = null;
+				return;
+			case 'STILL_MINING':
+				return;
+			case 'NEEDS_RETRY':
+				s.retried = true;
+				try {
+					b.entity.breakBlock(s.pos);
+				} catch {
+					b.mine = null;
+				}
+				return;
+			case 'UNBREAKABLE':
+			case 'PROTECTED_REGION':
+				b.breakTracker.record(verdict, s.typeId, s.pos);
+				b.mine = null;
+				return;
+			default:
+				b.mine = null;
+		}
+	}
+
+	private scanBlocks(b: BotState): BlockCandidate[] {
+		const out: BlockCandidate[] = [];
+		const base = b.entity.location;
+		const ox = Math.floor(base.x);
+		const oy = Math.floor(base.y);
+		const oz = Math.floor(base.z);
+		const step = 3;
+		const radius = 3;
+		try {
+			for (let dx = -radius; dx <= radius; dx += step) {
+				for (let dz = -radius; dz <= radius; dz += step) {
+					for (let dy = -1; dy <= 0; dy++) {
+						const pos = { x: ox + dx, y: oy + dy, z: oz + dz };
+						const block = b.entity.dimension.getBlock(pos);
+						if (!block || !BLOCK_TABLE[block.typeId]) continue;
+						out.push({
+							typeId: block.typeId,
+							pos,
+							distance: Math.hypot(dx, dy, dz),
+						});
+					}
+				}
+			}
+		} catch {
+			/* dimension unavailable */
+		}
+		return out;
+	}
+
+	private applyHotbar(b: BotState): void {
+		try {
+			const view = snapshotBot(b.entity);
+			const moves = planHotbar(view.items);
+			if (moves.length === 0) return;
+			const inv = b.entity.getComponent('minecraft:inventory')?.container;
+			if (!inv) return;
+			for (const m of moves) inv.swapItems(m.from, m.to, inv);
+		} catch {
+			/* inventory unavailable */
 		}
 	}
 
