@@ -1,8 +1,12 @@
 name: CI
 
+# Development branches get CI only. `main` is handled by release.yml, which runs
+# the same suite and then publishes a release if it passes.
 on:
   push:
+    branches-ignore: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   ci:
@@ -19,9 +23,3 @@ jobs:
           cache-dependency-path: addon/package-lock.json
       - run: npm ci
       - run: bash scripts/ci.sh
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: pack
-          path: addon/dist
-          if-no-files-found: ignore

@@ -1,5 +1,6 @@
 import { build } from 'esbuild';
-import { cpSync, mkdirSync, rmSync, writeFileSync, readdirSync } from 'node:fs';
+import { cpSync, mkdirSync, rmSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 
 const OUT = 'dist';
 const BP = `${OUT}/BP`;
@@ -47,3 +48,14 @@ if (withTests) {
 const bytes = Object.values(result.metafile?.outputs ?? {}).reduce((a, o) => a + o.bytes, 0);
 writeFileSync(`${OUT}/build-info.json`, JSON.stringify({ bundleBytes: bytes, withTests }, null, 1));
 console.log(`bundle: ${(bytes / 1024).toFixed(1)} KB${withTests ? ' (+ gametests)' : ''}`);
+
+// Package a double-clickable .mcaddon (BP + RP side by side).
+const pkg = JSON.parse(execFileSync('node', ['-p', "require('fs').readFileSync('package.json','utf8')"]).toString());
+const mcaddon = `${OUT}/PvP_Bots_v${pkg.version}.mcaddon`;
+try {
+	rmSync(mcaddon, { force: true });
+	execFileSync('zip', ['-qr', `PvP_Bots_v${pkg.version}.mcaddon`, 'BP', 'RP'], { cwd: OUT });
+	console.log(`package: ${mcaddon}`);
+} catch (e) {
+	console.warn(`package: skipped (${e.message}) — zip unavailable?`);
+}

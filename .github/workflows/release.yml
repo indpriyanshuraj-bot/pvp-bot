@@ -1,8 +1,15 @@
 name: Release
 
+# Every push to main runs the full suite. Only if all seven gates pass does it
+# tag the commit and publish a GitHub Release with the built .mcaddon attached,
+# which is what you download and install.
 on:
   push:
-    branches: [v3-dev]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   ci:
@@ -18,25 +25,51 @@ jobs:
           cache: npm
           cache-dependency-path: addon/package-lock.json
       - run: npm ci
-      - run: bash scripts/ci.sh
-      - uses: actions/upload-artifact@v4
+      - name: Full CI suite
+        run: bash scripts/ci.sh
+      - name: Upload build
+        uses: actions/upload-artifact@v4
         with:
           name: pack
           path: addon/dist
-          if-no-files-found: ignore
+          if-no-files-found: error
 
-  promote:
+  publish:
     needs: ci
-    if: success()
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
         with:
-          fetch-depth: 0
-      - name: Fast-forward released to the tested commit
+          name: pack
+          path: pack
+
+      - name: Tag and publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git push origin HEAD:released
+
+          VERSION=$(node -p "require('./addon/package.json').version")
+          TAG="v${VERSION}"
+
+          # If that exact version was already released, fall back to a build tag
+          # so every green main build still produces a downloadable release.
+          if git ls-remote --tags origin "refs/tags/${TAG}" | grep -q .; then
+            TAG="v${VERSION}-b${GITHUB_RUN_NUMBER}"
+          fi
+
+          ARTIFACT=$(ls pack/*.mcaddon)
+          echo "Publishing ${TAG} with ${ARTIFACT}"
+
+          git tag -a "${TAG}" -m "Automated release ${TAG} from ${GITHUB_SHA}"
+          git push origin "${TAG}"
+
+          gh release create "${TAG}" "${ARTIFACT}" \
+            --title "${TAG}" \
+            --notes "Automated release from commit ${GITHUB_SHA:0:7}." \
+            --notes "All CI gates passed: typecheck, purity, 228 unit tests, bundle, ESM portability, pack validation, gametest inventory." \
+            --notes "Install: download the .mcaddon below and open it, or drop it into your worlds. Requires **Beta APIs** enabled."

@@ -2,18 +2,34 @@
 
 Working repository for the PvP Practice Bots rebuild.
 
+## Download
+
+Open **[Releases](https://github.com/indpriyanshuraj-bot/pvp-bot/releases)** and grab
+the latest `PvP_Bots_v*.mcaddon` from the Assets section. Open the file and
+Minecraft imports it, or drop it into a world.
+
+**Requires the Beta APIs experiment** — `@minecraft/server-gametest` has no stable
+release, and the bots are built on `SimulatedPlayer`.
+
+### How releases are produced
+
+`main` is the source of truth. Every push to `main` runs the full seven-gate CI
+suite; **only if all seven pass** does the workflow tag the commit
+(`v<version>`, falling back to `v<version>-b<build>` if that version already
+shipped) and publish a GitHub Release with the built `.mcaddon` attached.
+
+A failing build never produces a tag or a release. Nothing is published by hand.
+
+To cut a versioned release, bump `version` in `addon/package.json` and merge to
+`main` — the tag follows the version automatically.
+
 ## Branches
 
 | Branch | Purpose |
 |---|---|
-| `main` | untouched skeleton |
+| `main` | source of truth; every green build becomes a release |
+| `v3-dev` | development branch, CI on every push, no releases |
 | `recovered/v2.9` | analysis + reference source of the old addon |
-| `v3-dev` | active development |
-| `released` | **auto-promoted from `v3-dev` whenever CI is green** — install from here |
-
-Promotion is automated: `.github/workflows/release.yml` runs the full CI suite on
-every push to `v3-dev` and fast-forwards `released` only if all seven gates pass.
-A red build never reaches `released`.
 
 ## Contents
 
