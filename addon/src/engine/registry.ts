@@ -4,7 +4,7 @@
  * the pure planner.
  */
 
-import { system, type Entity } from '@minecraft/server';
+import { system, world, type Entity } from '@minecraft/server';
 import type { SimulatedPlayer } from '@minecraft/server-gametest';
 import { Governor } from '../core/governor.js';
 import { chooseGoal, type PlannerInput } from '../core/planner.js';
@@ -24,6 +24,9 @@ import {
 } from '../skills/grind.js';
 import { BreakTracker } from '../skills/breakDetect.js';
 import { planHotbar } from '../skills/inventory.js';
+import { ArchetypeObserver } from '../social/observer.js';
+import { Relations } from '../social/relations.js';
+import { ChatPolicy } from '../social/chat.js';
 import { Input } from './input.js';
 import { snapshotBot, snapshotTarget } from './snapshot.js';
 import ARCHETYPE from '../data/archetypes.json';
@@ -42,6 +45,7 @@ export interface BotState {
 	tactic: string | null;
 	lastAttackTick: number;
 	mine: MineSession | null;
+	readonly observer: ArchetypeObserver;
 	readonly breakTracker: BreakTracker;
 	lastHotbar: number;
 	profileName: string;
@@ -54,6 +58,9 @@ class Registry {
 	private started = false;
 	private readonly bandit = new TacticBandit();
 	private readonly stuck = new StuckDetector();
+	private readonly relations = new Relations();
+	private readonly chat = new ChatPolicy();
+	private subscribed = false;
 
 	add(entity: SimulatedPlayer, pro: ProSettings = DEFAULT_PRO, profileName = 'normal'): void {
 		entity.addTag(BOT_TAG);
@@ -68,6 +75,7 @@ class Registry {
 			tactic: null,
 			lastAttackTick: -100,
 			mine: null,
+			observer: new ArchetypeObserver(),
 			breakTracker: new BreakTracker(),
 			lastHotbar: -999,
 			profileName,
@@ -93,7 +101,31 @@ class Registry {
 	start(): void {
 		if (this.started) return;
 		this.started = true;
+		this.subscribeRelations();
 		system.runInterval(() => this.tick(), 1);
+	}
+
+	/** Track who hits our bots, so trust reflects what actually happened. */
+	private subscribeRelations(): void {
+		if (this.subscribed) return;
+		this.subscribed = true;
+		try {
+			world.afterEvents.entityHurt.subscribe((ev) => {
+				const victim = ev.hurtEntity;
+				const attacker = ev.damageSource?.damagingEntity;
+				if (!victim || !attacker) return;
+				if (!this.bots.has(victim.id)) return;
+				if (this.bots.has(attacker.id)) return; // bot-on-bot is training, not betrayal
+				this.relations.recordHit(attacker.id, ev.damage ?? 0, system.currentTick);
+				this.relations.decay(system.currentTick);
+			});
+		} catch {
+			/* event unavailable */
+		}
+	}
+
+	get relationsView(): Relations {
+		return this.relations;
 	}
 
 	private tick(): void {
@@ -128,12 +160,27 @@ class Registry {
 		const target = targetEntity ? snapshotTarget(targetEntity) : null;
 		if (target && targetEntity) target.distance = distance(view.location, targetEntity.location);
 
+		// feed the L2 observer from the target's live behaviour
+		if (target) {
+			b.observer.observe(system.currentTick, {
+				distance: target.distance,
+				shielding: target.shielding,
+				airborne: target.airborne,
+				sprinting: target.sprinting,
+				healthFrac: target.health / Math.max(1, target.maxHealth),
+				heldTypeId: target.heldTypeId,
+			});
+			if (b.observer.samples >= 20) {
+				b.archetype = classifyArchetype(b.observer.features(), ARCHETYPE.centroids);
+			}
+		}
+
 		const input: PlannerInput = {
 			bot: view,
 			target,
 			caps,
 			threat: target ? 1 - view.health / Math.max(1, view.maxHealth) : 0,
-			relation: null,
+			relation: target ? { trust: this.relations.trustOf(target.id), betrayal: 0 } : null,
 			hunger: view.hunger,
 			grindEnabled: this.governor.throttle.grind,
 			hasHome: false,
@@ -197,6 +244,8 @@ class Registry {
 				lastAttackTick: b.lastAttackTick,
 			});
 			this.applyCombat(b, intent, t);
+
+			if (throttle.chat) this.tryChat(b, view, target);
 			return;
 		}
 
@@ -392,6 +441,31 @@ class Registry {
 		} catch {
 			/* inventory unavailable */
 		}
+	}
+
+	private tryChat(b: BotState, view: { health: number; maxHealth: number }, target: { name: string; health: number; maxHealth: number; distance: number; shielding: boolean }): void {
+		const line = this.chat.maybeSayAny(
+			{
+				targetName: target.name,
+				targetHealth: target.health,
+				targetMaxHealth: target.maxHealth,
+				myHealth: view.health,
+				myMaxHealth: view.maxHealth,
+				myWeapon: 'minecraft:sword',
+				distance: target.distance,
+				targetShielding: target.shielding,
+			},
+			system.currentTick,
+		);
+		if (!line) return;
+		system.runTimeout(() => {
+			if (!b.entity.isValid) return;
+			try {
+				b.entity.chat(line.text);
+			} catch {
+				/* chat unavailable */
+			}
+		}, line.delayTicks);
 	}
 
 	private applySurvival(

@@ -1,0 +1,34 @@
+{
+	"taunt_low_hp": {
+		"to": "target",
+		"when": { "targetHealthBelow": 0.3, "myHealthAbove": 0.7, "maxDistance": 8 },
+		"templates": ["{target}, you're on {targetHealth} — come on", "nice {targetHealth} hp {target}"],
+		"cooldown": 600,
+		"globalCooldown": 200,
+		"chance": 0.4
+	},
+	"respect_good_fight": {
+		"to": "target",
+		"when": { "myHealthBelow": 0.35, "targetHealthAbove": 0.6 },
+		"templates": ["gg {target}, you're better than I thought"],
+		"cooldown": 900,
+		"globalCooldown": 300,
+		"chance": 0.5
+	},
+	"call_out_shield": {
+		"to": "target",
+		"when": { "targetShielding": true, "maxDistance": 4 },
+		"templates": ["hiding behind that shield {target}?"],
+		"cooldown": 800,
+		"globalCooldown": 250,
+		"chance": 0.3
+	},
+	"engage_challenge": {
+		"to": "target",
+		"when": { "minDistance": 12, "maxDistance": 24 },
+		"templates": ["{target}, let's go"],
+		"cooldown": 1200,
+		"globalCooldown": 400,
+		"chance": 0.5
+	}
+}

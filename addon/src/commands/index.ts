@@ -96,6 +96,39 @@ export function registerCommands(): void {
 
 		reg.registerCommand(
 			{
+				name: 'pvb:trust',
+				description: 'Show what the bots think of each player',
+				permissionLevel: CommandPermissionLevel.GameDirectors,
+				cheatsRequired: false,
+				optionalParameters: [],
+			},
+			(origin) => {
+				const src = origin.sourceEntity;
+				if (!src || !('sendMessage' in src)) return { status: CustomCommandStatus.Success };
+				system.run(() => {
+					const snap = registry.relationsView.snapshot();
+					const ids = Object.keys(snap);
+					if (ids.length === 0) {
+						(src as Player).sendMessage('§7No trust data yet.');
+						return;
+					}
+					for (const id of ids) {
+						const s = snap[id];
+						if (!s) continue;
+						const label = registry.relationsView.isHostile(id)
+							? '§chostile'
+							: registry.relationsView.isFriendly(id)
+								? '§afriendly'
+								: '§7neutral';
+						(src as Player).sendMessage(`§8${id.slice(0, 8)} §7trust §f${Math.round(s.trust)} ${label}`);
+					}
+				});
+				return { status: CustomCommandStatus.Success };
+			},
+		);
+
+		reg.registerCommand(
+			{
 				name: 'pvb:clear',
 				description: 'Remove every practice bot',
 				permissionLevel: CommandPermissionLevel.GameDirectors,

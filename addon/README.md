@@ -14,6 +14,7 @@ detection, the control layer and the pro GUI.
 | `/pvb:spawn [profile]` | spawn a bot at your position (`easy`/`normal`/`hard`/`pro`) |
 | `/pvb:pro [preset]` | open the pro-level GUI, or apply a preset directly |
 | `/pvb:info` | bot count and governor tier |
+| `/pvb:trust` | show what the bots think of each player |
 | `/pvb:clear` | remove every bot |
 
 ## Layout
@@ -80,9 +81,21 @@ Phases 0–3 are built:
 - **grinding**: value-per-distance block selection, tool-tier and hunger gates,
   and the break classifier driving real mining attempts
 
-Not yet built: outbound chat, container/shulker execution (the gate is decided,
-the block placement is not), and the archetype observer that feeds L2 live data
-(the counter table is wired but `b.archetype` stays empty until phase 10).
+- **social**: trust model with accident-vs-pattern hit handling, betrayal estimate,
+  archetype observer (L2 is now live), and fact-filled rate-limited chat
+
+Not yet built: container/shulker execution (the gate is decided, the block
+placement is not), and inbound chat (reading `chatSend` needs the beta module).
+
+### Trust, and why a light bump is not betrayal
+
+`Relations` distinguishes an accident from a pattern. A hit above 3 damage costs
+40 trust. A light hit costs 5 — but a *second* light hit within 200 ticks costs
+25, because repetition is intent. Healing and shared targets build trust back,
+teammates have a floor, and trust drifts toward neutral when nothing happens.
+`betrayalScore` returns a probability from signals (trust, closing speed, weapon
+drawn, approach from behind, target switch) so the planner can react
+proportionally instead of instantly attacking a friend.
 
 ### Grinding and the unbreakable probe
 
