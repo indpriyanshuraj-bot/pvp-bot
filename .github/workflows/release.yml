@@ -68,8 +68,19 @@ jobs:
           git tag -a "${TAG}" -m "Automated release ${TAG} from ${GITHUB_SHA}"
           git push origin "${TAG}"
 
+          # --notes takes a single value, so build the body in a file.
+          cat > /tmp/notes.md <<NOTES
+          Automated release from commit \`${GITHUB_SHA:0:7}\`.
+
+          All seven CI gates passed: typecheck, purity, unit tests, bundle,
+          ESM portability, pack validation, gametest inventory.
+
+          **Install:** download the \`.mcaddon\` below and open it, or drop it into
+          a world. Requires the **Beta APIs** experiment to be enabled.
+
+          **Test it:** see \`addon/TESTING.md\` for the command-by-command guide.
+          NOTES
+
           gh release create "${TAG}" "${ARTIFACT}" \
             --title "${TAG}" \
-            --notes "Automated release from commit ${GITHUB_SHA:0:7}." \
-            --notes "All CI gates passed: typecheck, purity, 228 unit tests, bundle, ESM portability, pack validation, gametest inventory." \
-            --notes "Install: download the .mcaddon below and open it, or drop it into your worlds. Requires **Beta APIs** enabled."
+            --notes-file /tmp/notes.md
