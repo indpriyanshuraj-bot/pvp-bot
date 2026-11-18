@@ -13,6 +13,7 @@ change before a new addon is built. `main` is untouched.
 | `docs/ANALYSIS.md` | Full audit: validity, security, obfuscation recovery, and the scripting-API breaks |
 | `docs/ML-SYSTEM.md` | How bots decide, how the learner works, every ML setting, and the custom-bot rule engine |
 | `docs/PLAN.md` | **v3 architecture plan** — capability-driven design, API reality check, build phases |
+| `docs/DECISIONS.md` | **Systems decisions** — NLP, 3-level learning, watchdog governor, break detection, control layer, pro GUI |
 | `reference/v2.9/` | The deobfuscated v2.9 behaviour-pack source (57 files, ~14.5k readable lines) |
 | `reference/v2.9/README.md` | How the deobfuscation was done and what was validated |
 | `dist/` | Rebuilt `.mcaddon` (readable source) and the source archive |
