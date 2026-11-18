@@ -74,9 +74,22 @@ Phases 0–3 are built:
 - **combat**: tactic selection over `data/tactics.json`, affordability checks,
   reach/cooldown/crit gating, and the L1 x L2 x L3 modulation chain
 
-Not yet built: grinding, inventory management, survival/clutch, outbound chat,
-and the archetype observer that feeds L2 live data (the counter table is wired but
-`b.archetype` stays empty until phase 10).
+- **consumption**: risk-tiered food choice, potion lookup by need, milk gating
+- **survival**: falling / burning / drowning / low-health ladder with slot lookup
+
+Not yet built: grinding, inventory management, outbound chat, and the archetype
+observer that feeds L2 live data (the counter table is wired but `b.archetype`
+stays empty until phase 10).
+
+### Food risk, in one paragraph
+
+Nutrition and saturation come from `ItemFoodComponent`, so `data/food.json` only
+lists adverse effects and a risk tier. `chooseFood` scores each option as
+`nutrition + saturation*4 + urgency*12 - penalty`, where `urgency` rises as hunger
+falls and `penalty` shrinks with it — so rotten flesh is fine at half hunger and
+spider eye becomes acceptable when starving. Two hard floors override the maths:
+no high-risk food below 35% health, no medium-risk food below 20%. A starving bot
+at 4 HP still will not eat pufferfish.
 
 ### How the three learning levels combine
 

@@ -16,6 +16,8 @@ import { classifyArchetype, counterWeights, type Distribution } from '../learn/a
 import { combatFeatures } from '../learn/features.js';
 import { selectTactic, planCombat, type TacticContext } from '../skills/combat.js';
 import { planFlee, planHold, StuckDetector } from '../skills/move.js';
+import { planSurvival } from '../skills/survive.js';
+import { chooseFood } from '../skills/consume.js';
 import { Input } from './input.js';
 import { snapshotBot, snapshotTarget } from './snapshot.js';
 import ARCHETYPE from '../data/archetypes.json';
@@ -186,12 +188,17 @@ class Registry {
 			return;
 		}
 
-		if (b.goal === 'FLEE' || b.goal === 'CLUTCH') {
-			const t = this.findTarget(b);
+		if (b.goal === 'CLUTCH' || b.goal === 'FLEE') {
 			const view = snapshotBot(b.entity);
+			const caps = deriveCapabilities(view.items);
+			const survival = planSurvival(view, caps);
+			if (survival) {
+				this.applySurvival(b, view, survival);
+				return;
+			}
+			const t = this.findTarget(b);
 			if (t) {
-				const intent = planFlee(view, t.location, system.currentTick);
-				this.applyMove(b, intent);
+				this.applyMove(b, planFlee(view, t.location, system.currentTick));
 			} else {
 				b.input.stop();
 			}
@@ -199,9 +206,10 @@ class Registry {
 		}
 
 		if (b.goal === 'EAT') {
-			const foodSlot = this.findFoodSlot(b);
-			if (foodSlot >= 0) {
-				b.input.select(foodSlot);
+			const view = snapshotBot(b.entity);
+			const choice = chooseFood(view.items, view.hunger, view.health, view.maxHealth);
+			if (choice) {
+				b.input.select(choice.slot);
 				b.input.use();
 			} else {
 				b.input.stop();
@@ -217,6 +225,37 @@ class Registry {
 			this.applyMove(b, planHold(view, target));
 		} else {
 			b.input.stop();
+		}
+	}
+
+	private applySurvival(
+		b: BotState,
+		view: { location: { x: number; y: number; z: number } },
+		intent: { action: string; slot: number | null; lookDown: boolean },
+	): void {
+		switch (intent.action) {
+			case 'water_clutch':
+			case 'extinguish': {
+				// look at our feet so the bucket lands where we are
+				b.input.lookAt({ x: view.location.x, y: view.location.y - 2, z: view.location.z });
+				if (intent.slot !== null) b.input.select(intent.slot);
+				b.input.use();
+				return;
+			}
+			case 'ascend': {
+				b.input.lookAt({ x: view.location.x, y: view.location.y + 8, z: view.location.z });
+				b.input.move(1);
+				b.input.jump();
+				return;
+			}
+			case 'eat':
+			case 'pearl_away': {
+				if (intent.slot !== null) b.input.select(intent.slot);
+				b.input.use();
+				return;
+			}
+			default:
+				b.input.stop();
 		}
 	}
 
