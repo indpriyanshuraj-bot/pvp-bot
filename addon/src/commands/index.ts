@@ -4,7 +4,9 @@ import {
 	CommandPermissionLevel,
 	CustomCommandParamType,
 	CustomCommandStatus,
+	EquipmentSlot,
 	GameMode,
+	ItemStack,
 	system,
 	world,
 	type Player,
@@ -90,6 +92,54 @@ export function registerCommands(): void {
 				const tier = registry.governor.current;
 				const msg = `§7Bots: §f${registry.count}§7 | governor: §f${tier}`;
 				if (src && 'sendMessage' in src) system.run(() => (src as Player).sendMessage(msg));
+				return { status: CustomCommandStatus.Success };
+			},
+		);
+
+		reg.registerCommand(
+			{
+				name: 'pvb:kit',
+				description: 'Give the nearest bot a basic practice kit',
+				permissionLevel: CommandPermissionLevel.GameDirectors,
+				cheatsRequired: true,
+				optionalParameters: [],
+			},
+			(origin) => {
+				const src = origin.sourceEntity;
+				if (!src) return { status: CustomCommandStatus.Failure, message: 'No source entity' };
+				system.run(() => {
+					const bot = registry.nearestTo(src.location);
+					if (!bot) {
+						if ('sendMessage' in src) (src as Player).sendMessage('§cNo bot nearby.');
+						return;
+					}
+					try {
+						const inv = bot.entity.getComponent('minecraft:inventory')?.container;
+						if (inv) {
+							const kit: Array<[number, string, number]> = [
+								[0, 'minecraft:diamond_sword', 1],
+								[1, 'minecraft:shield', 1],
+								[2, 'minecraft:golden_apple', 8],
+								[3, 'minecraft:ender_pearl', 16],
+								[4, 'minecraft:cobblestone', 64],
+								[8, 'minecraft:golden_carrot', 16],
+							];
+							for (const [slot, id, amount] of kit) {
+								inv.setItem(slot, new ItemStack(id, amount));
+							}
+						}
+						const eq = bot.entity.getComponent('minecraft:equippable');
+						if (eq) {
+							eq.setEquipment(EquipmentSlot.Head, new ItemStack('minecraft:diamond_helmet', 1));
+							eq.setEquipment(EquipmentSlot.Chest, new ItemStack('minecraft:diamond_chestplate', 1));
+							eq.setEquipment(EquipmentSlot.Legs, new ItemStack('minecraft:diamond_leggings', 1));
+							eq.setEquipment(EquipmentSlot.Feet, new ItemStack('minecraft:diamond_boots', 1));
+						}
+						if ('sendMessage' in src) (src as Player).sendMessage('§aKit given to the nearest bot.');
+					} catch (err) {
+						if ('sendMessage' in src) (src as Player).sendMessage(`§cKit failed: ${String(err)}`);
+					}
+				});
 				return { status: CustomCommandStatus.Success };
 			},
 		);

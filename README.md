@@ -2,9 +2,18 @@
 
 Working repository for the PvP Practice Bots rebuild.
 
-**This branch — `recovered/v2.9` — is analysis and reference only.** It holds the
-recovered source of the shipped v2.9 addon plus the audit that explains what must
-change before a new addon is built. `main` is untouched.
+## Branches
+
+| Branch | Purpose |
+|---|---|
+| `main` | untouched skeleton |
+| `recovered/v2.9` | analysis + reference source of the old addon |
+| `v3-dev` | active development |
+| `released` | **auto-promoted from `v3-dev` whenever CI is green** — install from here |
+
+Promotion is automated: `.github/workflows/release.yml` runs the full CI suite on
+every push to `v3-dev` and fast-forwards `released` only if all seven gates pass.
+A red build never reaches `released`.
 
 ## Contents
 

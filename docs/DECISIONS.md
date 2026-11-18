@@ -28,6 +28,12 @@ Everything below assumes this pipeline.
 
 ## 1. NLP: what to use
 
+> **Priority note (agreed):** NLP is **not** a priority feature. It only needs to
+> be good enough to *take* what a player says and answer plausibly — a small
+> keyword intent matcher, not a conversation engine. Do not expand it further;
+> spend the effort on combat, movement and survival instead. The design below is
+> already sized for "basic", so nothing needs to be removed.
+
 ### Decision
 
 **Do not vendor a full NLP library. Build a ~350-line rule-based pipeline, and

@@ -582,6 +582,21 @@ class Registry {
 		}
 	}
 
+	/** Closest live bot to a point, for command targeting. */
+	nearestTo(pos: { x: number; y: number; z: number }): BotState | null {
+		let best: BotState | null = null;
+		let bestD = Infinity;
+		for (const b of this.bots.values()) {
+			if (!b.entity.isValid) continue;
+			const d = distance(pos, b.entity.location);
+			if (d < bestD) {
+				bestD = d;
+				best = b;
+			}
+		}
+		return best;
+	}
+
 	/** Drop bots that have disconnected or died without cleanup. */
 	prune(): number {
 		let removed = 0;
