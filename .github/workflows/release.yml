@@ -62,7 +62,16 @@ jobs:
             TAG="v${VERSION}-b${GITHUB_RUN_NUMBER}"
           fi
 
-          ARTIFACT=$(ls pack/*.mcpack pack/*.mcaddon 2>/dev/null | head -1)
+          # A glob that matches nothing makes ls exit 2, which pipefail turns into
+          # a hard failure. Collect candidates explicitly instead.
+          shopt -s nullglob
+          candidates=(pack/*.mcpack pack/*.mcaddon)
+          shopt -u nullglob
+          if [ ${#candidates[@]} -eq 0 ]; then
+            echo "No .mcpack or .mcaddon in the build artifact" >&2
+            exit 1
+          fi
+          ARTIFACT="${candidates[0]}"
           echo "Publishing ${TAG} with ${ARTIFACT}"
 
           git tag -a "${TAG}" -m "Automated release ${TAG} from ${GITHUB_SHA}"
