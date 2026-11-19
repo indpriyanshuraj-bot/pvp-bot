@@ -85,7 +85,7 @@ export function scoreGoals(i: PlannerInput): ScoredGoal[] {
 		out.push({ goal: 'EAT', score: s, reason: why });
 	}
 
-	// FLEE
+	// FLEE — a likely betrayal nearby is a reason to open distance.
 	{
 		let s = 0;
 		let why = 'healthy';
@@ -93,6 +93,11 @@ export function scoreGoals(i: PlannerInput): ScoredGoal[] {
 			s = (1 - hpFrac) * 70 - i.caps.utility.pearl * 1.5;
 			why = `hp ${Math.round(hpFrac * 100)}%`;
 			if (hpFrac > 0.6) s = Math.max(0, s - 30);
+			const betrayal = i.relation?.betrayal ?? 0;
+			if (betrayal > 0.6) {
+				s += (betrayal - 0.6) * 100;
+				why = `betrayal risk ${Math.round(betrayal * 100)}%`;
+			}
 		}
 		out.push({ goal: 'FLEE', score: Math.max(0, s), reason: why });
 	}
@@ -105,10 +110,12 @@ export function scoreGoals(i: PlannerInput): ScoredGoal[] {
 		out.push({ goal: 'GRIND', score: s, reason: why });
 	}
 
-	// FOLLOW — stick with a trusted player
+	// FOLLOW — stick with a trusted player, but not one we suspect.
 	{
 		let s = 0;
-		if (i.relation && i.relation.trust > 50) s = 30;
+		const trust = i.relation?.trust ?? 0;
+		const betrayal = i.relation?.betrayal ?? 0;
+		if (trust > 50 && betrayal < 0.6) s = 30;
 		out.push({ goal: 'FOLLOW', score: s, reason: 'trusted ally nearby' });
 	}
 

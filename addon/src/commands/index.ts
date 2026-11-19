@@ -14,6 +14,7 @@ import {
 import { spawnSimulatedPlayer } from '@minecraft/server-gametest';
 import { registry } from '../engine/registry.js';
 import { loadPro, openProMenu, applyPreset } from './pro.js';
+import { planStash } from '../skills/inventory.js';
 import { PRO_PRESETS } from '../core/pro.js';
 
 let registered = false;
@@ -69,9 +70,17 @@ export function registerCommands(): void {
 				const src = origin.sourceEntity;
 				if (!src) return { status: CustomCommandStatus.Failure };
 				system.run(() => {
-					if (typeof preset === 'string' && applyPreset(preset)) {
-						if ('sendMessage' in src) (src as Player).sendMessage(`§aApplied preset §f${preset}`);
-						return;
+					if (typeof preset === 'string') {
+						const applied = applyPreset(preset);
+						if (applied) {
+							const n = registry.applyPro(applied, preset);
+							if ('sendMessage' in src) {
+								(src as Player).sendMessage(
+									`§aApplied preset §f${preset}§a to §f${n}§a live bot(s).`,
+								);
+							}
+							return;
+						}
 					}
 					if ('sendMessage' in src) openProMenu(src as Player);
 				});
@@ -216,6 +225,56 @@ export function registerCommands(): void {
 						? '§aDebug nametags ON §7— each bot shows goal / tactic / target / governor tier.'
 						: '§7Debug nametags OFF.';
 					if ('sendMessage' in src) (src as Player).sendMessage(msg);
+				});
+				return { status: CustomCommandStatus.Success };
+			},
+		);
+
+		reg.registerCommand(
+			{
+				name: 'pvb:stash',
+				description: 'Stow the nearest bot\'s overflow into its ender chest',
+				permissionLevel: CommandPermissionLevel.GameDirectors,
+				cheatsRequired: true,
+				optionalParameters: [],
+			},
+			(origin) => {
+				const src = origin.sourceEntity;
+				if (!src) return { status: CustomCommandStatus.Failure };
+				system.run(() => {
+					const bot = registry.nearestTo(src.location);
+					if (!bot) {
+						if ('sendMessage' in src) (src as Player).sendMessage('§cNo bot nearby.');
+						return;
+					}
+					try {
+						const inv = bot.entity.getComponent('minecraft:inventory')?.container;
+						const ender = bot.entity.getComponent('minecraft:ender_inventory')?.container;
+						if (!inv || !ender) {
+							if ('sendMessage' in src) (src as Player).sendMessage('§cBot has no ender inventory.');
+							return;
+						}
+						const view = bot.view;
+						if (!view) {
+							if ('sendMessage' in src) (src as Player).sendMessage('§cBot has no snapshot yet.');
+							return;
+						}
+						let moved = 0;
+						for (const slot of planStash(view.items)) {
+							const stack = inv.getItem(slot);
+							if (!stack) continue;
+							const leftover = ender.addItem(stack);
+							if (!leftover) {
+								inv.setItem(slot, undefined);
+								moved++;
+							}
+						}
+						if ('sendMessage' in src) {
+							(src as Player).sendMessage(`§aStowed §f${moved}§a stack(s) into the bot's ender chest.`);
+						}
+					} catch (err) {
+						if ('sendMessage' in src) (src as Player).sendMessage(`§cStash failed: ${String(err)}`);
+					}
 				});
 				return { status: CustomCommandStatus.Success };
 			},

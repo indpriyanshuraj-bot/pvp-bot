@@ -245,7 +245,57 @@ or use a protected area. The bot should try, fail, retry once, and then stop
 trying that block type. If it keeps hammering the same block forever, the
 `NEEDS_RETRY` → `UNBREAKABLE` transition is broken.
 
-### 3.10 Chat
+### 3.10 Potions
+
+Give the bot a healing potion, hurt it below 45% health, and attack it.
+
+**Expected:** it drinks the potion rather than eating, because a potion lands
+instantly and eating does not. Out of combat at the same health it eats a golden
+apple instead, saving the potion.
+
+If it eats while being hit → `planConsumable` got `inFight: false`, meaning the
+bot had no target at that moment.
+
+### 3.11 Inbound chat
+
+Type in chat:
+
+```
+hey
+```
+
+**Expected:** within a second or two a nearby bot replies `yo <yourname>`. Try
+`where are you` — it answers with its **actual** coordinates, read live.
+
+Silence is normal for most messages: replies are per-intent, per-speaker
+cooldowns plus a chance roll, and unknown intents are ignored entirely.
+
+**If nothing ever replies:** inbound chat needs `world.beforeEvents.chatSend`,
+which is beta-only. Check the content log for
+`chatSend unavailable (needs Beta APIs) — inbound chat off`. The bot still talks
+(outbound), it just cannot listen.
+
+### 3.12 Betrayal
+
+Hit a bot lightly a few times, then stand close with a weapon while it is
+fighting something else.
+
+**Expected:** its trust drops and, once betrayal risk passes 60%, it stops
+following you and starts opening distance. It does **not** attack you — the
+estimate only feeds caution.
+
+### 3.13 Stash
+
+Fill the bot's main inventory (slots 9+) by giving it items, then:
+
+```
+/pvb:stash
+```
+
+**Expected:** `Stowed N stack(s) into the bot's ender chest.` Its hotbar is
+untouched — the sword stays in its hand.
+
+### 3.14 Chat
 
 Let the bot fight you down to low health.
 
@@ -267,6 +317,7 @@ bug.
 | `/pvb:remove` | disconnect the nearest bot |
 | `/pvb:respawn` | respawn the nearest bot at your position |
 | `/pvb:debug` | toggle status nametags |
+| `/pvb:stash` | stow the nearest bot's overflow into its ender chest |
 | `/pvb:trust` | show the trust table |
 | `/pvb:pro [preset]` | pro-level GUI, or apply a preset |
 | `/pvb:info` | bot count and governor tier |

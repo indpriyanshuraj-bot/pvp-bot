@@ -118,3 +118,21 @@ export function planShulkerUse(
 export function shouldStow(threat: number, inventoryFull: boolean, hasEnderChest: boolean): boolean {
 	return hasEnderChest && threat < 0.4 && inventoryFull;
 }
+
+/**
+ * Which inventory slots should be stowed into the ender chest.
+ *
+ * Only the main inventory (slot 9+): the hotbar is the working set and must stay
+ * put, otherwise the bot stows the sword it is holding.
+ */
+export function planStash(items: readonly ItemView[], hotbarSize = HOTBAR_SIZE): number[] {
+	const out: number[] = [];
+	for (const it of items) {
+		if (it.slot < hotbarSize) continue;
+		// armour slots are 100+, they are not container slots
+		if (it.slot >= 100) continue;
+		if (it.amount <= 0) continue;
+		out.push(it.slot);
+	}
+	return out.sort((a, b) => a - b);
+}

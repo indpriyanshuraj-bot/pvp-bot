@@ -17,7 +17,7 @@ import { combatFeatures } from '../learn/features.js';
 import { selectTactic, planCombat, type TacticContext } from '../skills/combat.js';
 import { planFlee, planHold, StuckDetector } from '../skills/move.js';
 import { planSurvival } from '../skills/survive.js';
-import { chooseFood } from '../skills/consume.js';
+import { planConsumable } from '../skills/consumables.js';
 import {
 	planGrind, beginMining, evaluateMining, ruleFor, BLOCK_TABLE,
 	type BlockCandidate, type MineSession,
@@ -25,8 +25,11 @@ import {
 import { BreakTracker } from '../skills/breakDetect.js';
 import { planHotbar } from '../skills/inventory.js';
 import { ArchetypeObserver } from '../social/observer.js';
-import { Relations } from '../social/relations.js';
+import { Relations, betrayalScore } from '../social/relations.js';
 import { ChatPolicy } from '../social/chat.js';
+import { ReplyPolicy } from '../social/responder.js';
+import { classify } from '../social/nlp.js';
+import INTENTS from '../data/chat-intents.json';
 import { Input } from './input.js';
 import { snapshotBot, snapshotTarget } from './snapshot.js';
 import { pickTarget, DEFAULT_TARGET_POLICY, type TargetCandidate, type TargetPolicy } from '../core/targeting.js';
@@ -54,6 +57,8 @@ export interface BotState {
 	/** who last damaged this bot, for the provoked-mob rule */
 	lastAttackerId: string | null;
 	lastAttackerTick: number;
+	/** previous distance to the current target, for the closing-speed signal */
+	prevDistance: number | null;
 	readonly breakTracker: BreakTracker;
 	lastHotbar: number;
 	profileName: string;
@@ -68,6 +73,8 @@ class Registry {
 	private readonly stuck = new StuckDetector();
 	private readonly relations = new Relations();
 	private readonly chat = new ChatPolicy();
+	private readonly replier = new ReplyPolicy();
+	private chatWired = false;
 	private readonly targetPolicy: TargetPolicy = { ...DEFAULT_TARGET_POLICY };
 	private debugTags = false;
 	private subscribed = false;
@@ -96,6 +103,7 @@ class Registry {
 			observer: new ArchetypeObserver(),
 			lastAttackerId: null,
 			lastAttackerTick: -9999,
+			prevDistance: null,
 			breakTracker: new BreakTracker(),
 			lastHotbar: -999,
 			profileName,
@@ -122,6 +130,7 @@ class Registry {
 		if (this.started) return;
 		this.started = true;
 		this.subscribeRelations();
+		this.subscribeChat();
 		system.runInterval(() => this.tick(), 1);
 	}
 
@@ -151,6 +160,70 @@ class Registry {
 			});
 		} catch {
 			/* event unavailable */
+		}
+	}
+
+	/**
+	 * Inbound chat. `world.beforeEvents.chatSend` only exists in the beta module,
+	 * so this is feature-detected: on a stable-only module the bot keeps talking
+	 * but stops listening, which is a graceful degradation rather than a crash.
+	 */
+	private subscribeChat(): void {
+		if (this.chatWired) return;
+		this.chatWired = true;
+		try {
+			const before = world.beforeEvents as unknown as {
+				chatSend?: { subscribe: (cb: (ev: { sender?: Entity; message?: string }) => void) => void };
+			};
+			if (!before.chatSend?.subscribe) {
+				console.info('[PvP Bots v3] chatSend unavailable (needs Beta APIs) — inbound chat off');
+				return;
+			}
+			before.chatSend.subscribe((ev) => {
+				const sender = ev.sender;
+				const message = ev.message;
+				if (!sender || typeof message !== 'string') return;
+				if (sender.hasTag(BOT_TAG)) return;
+				if (this.bots.size === 0) return;
+				// beforeEvents run read-only; replying must be deferred
+				system.run(() => this.handleChat(sender, message));
+			});
+		} catch (err) {
+			console.warn(`[PvP Bots v3] could not subscribe to chatSend: ${String(err)}`);
+		}
+	}
+
+	private handleChat(sender: Entity, message: string): void {
+		if (!this.governor.throttle.chat) return;
+		if (!sender.isValid) return;
+		try {
+			const names = world.getPlayers().map((p) => p.name);
+			const match = classify(message, INTENTS as never, names);
+			if (!match) return;
+
+			const bot = this.nearestTo(sender.location);
+			if (!bot) return;
+
+			const reply = this.replier.maybeReply(
+				{
+					speaker: sender.nameTag || 'player',
+					intent: match.intent,
+					coords: bot.entity.location,
+				},
+				system.currentTick,
+			);
+			if (!reply) return;
+
+			system.runTimeout(() => {
+				if (!bot.entity.isValid) return;
+				try {
+					bot.entity.chat(reply.text);
+				} catch {
+					/* chat unavailable */
+				}
+			}, reply.delayTicks);
+		} catch {
+			/* never let chat break the loop */
 		}
 	}
 
@@ -237,7 +310,7 @@ class Registry {
 			target,
 			caps,
 			threat: target ? 1 - view.health / Math.max(1, view.maxHealth) : 0,
-			relation: target ? { trust: this.relations.trustOf(target.id), betrayal: 0 } : null,
+			relation: target ? this.relationFor(b, view, target) : null,
 			hunger: view.hunger,
 			grindEnabled: this.governor.throttle.grind,
 			hasHome: false,
@@ -265,6 +338,33 @@ class Registry {
 		} else {
 			b.tactic = null;
 		}
+	}
+
+	/** Trust plus a live betrayal estimate from observable behaviour. */
+	private relationFor(
+		b: BotState,
+		view: { view: { x: number; z: number }; location: { x: number; z: number } },
+		target: { id: string; distance: number; heldTypeId: string | null; location: { x: number; z: number } },
+	): { trust: number; betrayal: number } {
+		const closing = b.prevDistance === null ? 0 : b.prevDistance - target.distance;
+		b.prevDistance = target.distance;
+
+		const dx = target.location.x - view.location.x;
+		const dz = target.location.z - view.location.z;
+		const len = Math.hypot(dx, dz) || 1;
+		// negative dot means the target is behind us
+		const dot = (view.view.x * dx + view.view.z * dz) / len;
+		const weapon = target.heldTypeId;
+
+		const betrayal = betrayalScore({
+			trust: this.relations.trustOf(target.id),
+			closingSpeed: closing,
+			weaponDrawn: !!weapon && !weapon.includes('map') && !weapon.includes('air'),
+			behind: dot < -0.2,
+			switchedToMe: false,
+		});
+
+		return { trust: this.relations.trustOf(target.id), betrayal };
 	}
 
 	private dimensionName(b: BotState): string {
@@ -330,7 +430,8 @@ class Registry {
 		}
 
 		if (b.goal === 'EAT') {
-			const choice = chooseFood(view.items, view.hunger, view.health, view.maxHealth);
+			const inFight = !!b.targetEntity && b.targetEntity.isValid;
+			const choice = planConsumable(view, inFight);
 			if (choice) {
 				b.input.select(choice.slot);
 				b.input.use();
@@ -645,6 +746,17 @@ class Registry {
 		} catch {
 			return undefined;
 		}
+	}
+
+	/** Re-resolve every live bot against a new pro profile. */
+	applyPro(pro: ProSettings, profileName: string): number {
+		let n = 0;
+		for (const b of this.bots.values()) {
+			b.pro = { ...pro };
+			b.profileName = profileName;
+			n++;
+		}
+		return n;
 	}
 
 	setDebug(on: boolean): void {

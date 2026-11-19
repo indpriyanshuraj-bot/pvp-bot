@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-	classifyItem, planHotbar, roleSlot, slotForRole, planShulkerUse, shouldStow,
+	classifyItem, planHotbar, roleSlot, slotForRole, planShulkerUse, shouldStow, planStash,
 	HOTBAR_LAYOUT, type HotbarMove,
 } from '../src/skills/inventory.js';
 import type { ItemView } from '../src/types.js';
@@ -106,4 +106,22 @@ test('stowing needs a calm moment and a full inventory', () => {
 	assert.equal(shouldStow(0.1, true, true), true);
 	assert.equal(shouldStow(0.7, true, true), false);
 	assert.equal(shouldStow(0.1, false, true), false);
+});
+
+test('stash targets main inventory only, never the hotbar', () => {
+	const items = [
+		item('minecraft:diamond_sword', 0),
+		item('minecraft:cobblestone', 12),
+		item('minecraft:iron_ore', 30),
+	];
+	assert.deepEqual(planStash(items), [12, 30]);
+});
+
+test('stash ignores armour slots', () => {
+	const items = [item('minecraft:diamond_helmet', 100), item('minecraft:dirt', 15)];
+	assert.deepEqual(planStash(items), [15]);
+});
+
+test('stash is empty when there is nothing to stow', () => {
+	assert.deepEqual(planStash([item('minecraft:diamond_sword', 0)]), []);
 });
