@@ -114,19 +114,17 @@ export function registerCommands(): void {
 						return;
 					}
 					try {
-						const inv = bot.entity.getComponent('minecraft:inventory')?.container;
-						if (inv) {
-							const kit: Array<[number, string, number]> = [
-								[0, 'minecraft:diamond_sword', 1],
-								[1, 'minecraft:shield', 1],
-								[2, 'minecraft:golden_apple', 8],
-								[3, 'minecraft:ender_pearl', 16],
-								[4, 'minecraft:cobblestone', 64],
-								[8, 'minecraft:golden_carrot', 16],
-							];
-							for (const [slot, id, amount] of kit) {
-								inv.setItem(slot, new ItemStack(id, amount));
-							}
+						bot.input.clearInventory();
+						const kit: Array<[number, string, number]> = [
+							[0, 'minecraft:diamond_sword', 1],
+							[1, 'minecraft:shield', 1],
+							[2, 'minecraft:golden_apple', 8],
+							[3, 'minecraft:ender_pearl', 16],
+							[4, 'minecraft:cobblestone', 64],
+							[8, 'minecraft:golden_carrot', 16],
+						];
+						for (const [slot, id, amount] of kit) {
+							bot.input.give(new ItemStack(id, amount), slot, slot === 0);
 						}
 						const eq = bot.entity.getComponent('minecraft:equippable');
 						if (eq) {
@@ -135,10 +133,89 @@ export function registerCommands(): void {
 							eq.setEquipment(EquipmentSlot.Legs, new ItemStack('minecraft:diamond_leggings', 1));
 							eq.setEquipment(EquipmentSlot.Feet, new ItemStack('minecraft:diamond_boots', 1));
 						}
+						// select last so the held item definitely updates
+						bot.input.select(0);
 						if ('sendMessage' in src) (src as Player).sendMessage('§aKit given to the nearest bot.');
 					} catch (err) {
 						if ('sendMessage' in src) (src as Player).sendMessage(`§cKit failed: ${String(err)}`);
 					}
+				});
+				return { status: CustomCommandStatus.Success };
+			},
+		);
+
+		reg.registerCommand(
+			{
+				name: 'pvb:remove',
+				description: 'Disconnect the nearest bot',
+				permissionLevel: CommandPermissionLevel.GameDirectors,
+				cheatsRequired: false,
+				optionalParameters: [],
+			},
+			(origin) => {
+				const src = origin.sourceEntity;
+				if (!src) return { status: CustomCommandStatus.Failure };
+				system.run(() => {
+					const bot = registry.nearestTo(src.location);
+					if (!bot) {
+						if ('sendMessage' in src) (src as Player).sendMessage('§cNo bot nearby.');
+						return;
+					}
+					bot.input.disconnect();
+					registry.remove(bot.entity.id);
+					if ('sendMessage' in src) (src as Player).sendMessage('§aRemoved the nearest bot.');
+				});
+				return { status: CustomCommandStatus.Success };
+			},
+		);
+
+		reg.registerCommand(
+			{
+				name: 'pvb:respawn',
+				description: 'Respawn the nearest bot at your position',
+				permissionLevel: CommandPermissionLevel.GameDirectors,
+				cheatsRequired: true,
+				optionalParameters: [],
+			},
+			(origin) => {
+				const src = origin.sourceEntity;
+				if (!src) return { status: CustomCommandStatus.Failure };
+				system.run(() => {
+					const bot = registry.nearestTo(src.location);
+					if (!bot) {
+						if ('sendMessage' in src) (src as Player).sendMessage('§cNo bot nearby.');
+						return;
+					}
+					try {
+						bot.entity.respawn();
+						bot.entity.teleport(src.location);
+						bot.input.clearInventory();
+						if ('sendMessage' in src) (src as Player).sendMessage('§aBot respawned at your position.');
+					} catch (err) {
+						if ('sendMessage' in src) (src as Player).sendMessage(`§cRespawn failed: ${String(err)}`);
+					}
+				});
+				return { status: CustomCommandStatus.Success };
+			},
+		);
+
+		reg.registerCommand(
+			{
+				name: 'pvb:debug',
+				description: 'Toggle a status nametag on every bot (goal / tactic / target / tier)',
+				permissionLevel: CommandPermissionLevel.GameDirectors,
+				cheatsRequired: false,
+				optionalParameters: [],
+			},
+			(origin) => {
+				const src = origin.sourceEntity;
+				if (!src) return { status: CustomCommandStatus.Failure };
+				system.run(() => {
+					registry.setDebug(!registry.debug);
+					const msg = registry.debug
+						? '§aDebug nametags ON §7— each bot shows goal / tactic / target / governor tier.'
+						: '§7Debug nametags OFF.';
+					if ('sendMessage' in src) (src as Player).sendMessage(msg);
 				});
 				return { status: CustomCommandStatus.Success };
 			},

@@ -77,3 +77,39 @@ register('pvb', 'inputRespectsBudget', (test: Test) => {
 	.maxTicks(120)
 	.tag('pvb')
 	.tag('input');
+
+/**
+ * Regression test for the moveRelative arity bug: the old call passed a third
+ * movement value which was silently read as `speed`, so the bot strafed and
+ * never walked forward. A displacement-only check passes on strafing, so this
+ * one asserts the movement is along the facing direction.
+ */
+register('pvb', 'inputMovesForwardNotSideways', (test: Test) => {
+	const bot = test.spawnSimulatedPlayer({ x: 0.5, y: 1, z: 0.5 }, 'pvb_fwd');
+	const input = new Input(bot);
+	const start = { ...bot.location };
+	const facing = { ...bot.getViewDirection() };
+
+	test.runAfterDelay(2, () => {
+		// forward only: strafe 0
+		input.move(1, 0);
+	});
+
+	test.runAfterDelay(25, () => {
+		const dx = bot.location.x - start.x;
+		const dz = bot.location.z - start.z;
+		const forward = dx * facing.x + dz * facing.z;
+		const sideways = Math.abs(dx * facing.z - dz * facing.x);
+		if (forward > 0.8 && forward > sideways * 2) {
+			test.succeed();
+		} else {
+			test.fail(
+				`forward=${forward.toFixed(2)} sideways=${sideways.toFixed(2)} — ` +
+					'bot is not moving along its facing (moveRelative arity regression)',
+			);
+		}
+	});
+})
+	.maxTicks(200)
+	.tag('pvb')
+	.tag('input');

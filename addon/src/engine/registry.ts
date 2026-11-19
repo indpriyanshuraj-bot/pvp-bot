@@ -29,6 +29,7 @@ import { Relations } from '../social/relations.js';
 import { ChatPolicy } from '../social/chat.js';
 import { Input } from './input.js';
 import { snapshotBot, snapshotTarget } from './snapshot.js';
+import { pickTarget, DEFAULT_TARGET_POLICY, type TargetCandidate, type TargetPolicy } from '../core/targeting.js';
 import ARCHETYPE from '../data/archetypes.json';
 import type { BotView, CapabilitySet, CombatIntent, Goal, MoveIntent } from '../types.js';
 
@@ -50,6 +51,9 @@ export interface BotState {
 	caps: CapabilitySet | null;
 	targetEntity: Entity | null;
 	readonly observer: ArchetypeObserver;
+	/** who last damaged this bot, for the provoked-mob rule */
+	lastAttackerId: string | null;
+	lastAttackerTick: number;
 	readonly breakTracker: BreakTracker;
 	lastHotbar: number;
 	profileName: string;
@@ -64,14 +68,20 @@ class Registry {
 	private readonly stuck = new StuckDetector();
 	private readonly relations = new Relations();
 	private readonly chat = new ChatPolicy();
+	private readonly targetPolicy: TargetPolicy = { ...DEFAULT_TARGET_POLICY };
+	private debugTags = false;
 	private subscribed = false;
 	private failures = 0;
 
 	add(entity: SimulatedPlayer, pro: ProSettings = DEFAULT_PRO, profileName = 'normal'): void {
 		entity.addTag(BOT_TAG);
+		const input = new Input(entity);
+		// Worlds often hand every new player a starting map. Clear it, otherwise the
+		// bot keeps holding it and the hotbar policy fights the leftovers.
+		input.clearInventory();
 		this.bots.set(entity.id, {
 			entity,
-			input: new Input(entity),
+			input,
 			goal: null,
 			pro,
 			lastThink: -999,
@@ -84,6 +94,8 @@ class Registry {
 			caps: null,
 			targetEntity: null,
 			observer: new ArchetypeObserver(),
+			lastAttackerId: null,
+			lastAttackerTick: -9999,
 			breakTracker: new BreakTracker(),
 			lastHotbar: -999,
 			profileName,
@@ -126,6 +138,16 @@ class Registry {
 				if (this.bots.has(attacker.id)) return; // bot-on-bot is training, not betrayal
 				this.relations.recordHit(attacker.id, ev.damage ?? 0, system.currentTick);
 				this.relations.decay(system.currentTick);
+				const state = this.bots.get(victim.id);
+				if (state) {
+					state.lastAttackerId = attacker.id;
+					state.lastAttackerTick = system.currentTick;
+				}
+			});
+			world.afterEvents.entityDie.subscribe((ev) => {
+				const dead = ev.deadEntity;
+				if (!dead) return;
+				if (this.bots.has(dead.id)) this.remove(dead.id);
 			});
 		} catch {
 			/* event unavailable */
@@ -156,6 +178,7 @@ class Registry {
 			const list = this.all().filter((b) => b.entity.isValid);
 			if (list.length === 0) return;
 
+			if (system.currentTick % 100 === 0) this.prune();
 			const due = list.filter((b) => system.currentTick - b.lastThink >= throttle.thinkTicks);
 			if (due.length > 0) {
 				// round-robin so a long list does not all think in the same tick
@@ -171,6 +194,8 @@ class Registry {
 				// one misbehaving bot must never take down the loop
 				try {
 					this.act(b);
+					const t = b.targetEntity;
+					this.updateTag(b, t && t.isValid ? t.nameTag || t.typeId.replace('minecraft:', '') : '-');
 				} catch {
 					this.failures++;
 				}
@@ -278,7 +303,12 @@ class Registry {
 				nowTick: system.currentTick,
 				lastAttackTick: b.lastAttackTick,
 			});
-			this.applyCombat(b, intent, t);
+			// Beyond a short sprint, let the engine path instead of steering raw.
+			if (target.distance > 12) {
+				b.input.navigate(t.location, 1);
+			} else {
+				this.applyCombat(b, intent, t);
+			}
 
 			if (throttle.chat) this.tryChat(b, view, target, caps);
 			return;
@@ -585,21 +615,56 @@ class Registry {
 				location: b.entity.location,
 				maxDistance: radius,
 			});
-			let best: Entity | undefined;
-			let bestD = Infinity;
+
+			const scored: Array<{ entity: Entity; candidate: TargetCandidate }> = [];
 			for (const e of found) {
 				if (!e.isValid || e.id === b.entity.id) continue;
 				if (e.hasTag(BOT_TAG)) continue;
-				if (e.typeId !== 'minecraft:player') continue;
+				const view = snapshotTarget(e);
 				const d = distance(b.entity.location, e.location);
-				if (d < bestD) {
-					bestD = d;
-					best = e;
-				}
+				if (d > this.targetPolicy.maxDistance) continue;
+				scored.push({
+					entity: e,
+					candidate: {
+						id: view.id,
+						typeId: e.typeId,
+						distance: d,
+						isPlayer: view.isPlayer,
+						gameMode: view.gameMode,
+						health: view.health,
+						maxHealth: view.maxHealth,
+						attackingMe:
+							b.lastAttackerId === e.id && system.currentTick - b.lastAttackerTick < 200,
+					},
+				});
 			}
-			return best;
+
+			const best = pickTarget(scored.map((s) => s.candidate), this.targetPolicy);
+			if (!best) return undefined;
+			return scored.find((s) => s.candidate.id === best.id)?.entity;
 		} catch {
 			return undefined;
+		}
+	}
+
+	setDebug(on: boolean): void {
+		this.debugTags = on;
+	}
+
+	get debug(): boolean {
+		return this.debugTags;
+	}
+
+	/** Short status line so a failure can be read off the bot's head in-game. */
+	private updateTag(b: BotState, targetName: string): void {
+		if (!this.debugTags || !b.entity.isValid) return;
+		const goal = b.goal ?? 'IDLE';
+		const tactic = b.tactic ?? '-';
+		const tag = `§b${goal}§7/§e${tactic}§7 ${targetName} §8${this.governor.current}`;
+		try {
+			if (b.entity.nameTag !== tag) b.entity.nameTag = tag;
+		} catch {
+			/* entity gone */
 		}
 	}
 

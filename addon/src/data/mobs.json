@@ -1,0 +1,20 @@
+{
+	"hostile": [
+		"minecraft:zombie", "minecraft:husk", "minecraft:drowned", "minecraft:zombie_villager",
+		"minecraft:skeleton", "minecraft:stray", "minecraft:bogged", "minecraft:wither_skeleton",
+		"minecraft:creeper", "minecraft:spider", "minecraft:cave_spider",
+		"minecraft:witch", "minecraft:pillager", "minecraft:vindicator", "minecraft:evoker",
+		"minecraft:ravager", "minecraft:vex", "minecraft:phantom",
+		"minecraft:blaze", "minecraft:ghast", "minecraft:magma_cube",
+		"minecraft:silverfish", "minecraft:endermite",
+		"minecraft:guardian", "minecraft:elder_guardian", "minecraft:shulker",
+		"minecraft:zoglin", "minecraft:warden", "minecraft:breeze"
+	],
+	"neutral": [
+		"minecraft:enderman", "minecraft:slime", "minecraft:hoglin", "minecraft:piglin",
+		"minecraft:zombified_piglin", "minecraft:piglin_brute",
+		"minecraft:bee", "minecraft:iron_golem", "minecraft:snow_golem",
+		"minecraft:wolf", "minecraft:polar_bear", "minecraft:panda", "minecraft:llama",
+		"minecraft:trader_llama", "minecraft:goat", "minecraft:dolphin"
+	]
+}

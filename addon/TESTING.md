@@ -64,6 +64,7 @@ fastest way to find out whether the control layer works at all.
 
 ```
 /gametest run pvb:inputMovesBot
+/gametest run pvb:inputMovesForwardNotSideways
 /gametest run pvb:inputTurnsBot
 /gametest run pvb:inputRespectsBudget
 /gametest run pvb:registryTracksBots
@@ -73,6 +74,7 @@ fastest way to find out whether the control layer works at all.
 | Test | What it does | Expected |
 |---|---|---|
 | `inputMovesBot` | spawns a bot, calls `move(1)` once, waits 20 ticks | **passes** if the bot moved more than 0.5 blocks |
+| `inputMovesForwardNotSideways` | forward-only move, compares displacement to facing | **passes** if it moved *along* its facing — catches the `moveRelative` arity regression |
 | `inputTurnsBot` | aims at a point behind the bot | **passes** if yaw changed by more than 30° |
 | `inputRespectsBudget` | fires 20 move intents in one tick with a budget of 3 | **passes** if the bot moved less than 1 block |
 | `registryTracksBots` | adds a bot to the registry | **passes** if the count incremented |
@@ -113,8 +115,9 @@ Then rebuild. That is a packaging detail, not a logic failure.
 **Expected:** a bot named `§bPVPBot` appears at your feet; `/pvb:info` now reports
 `Bots: 1`.
 
-Bots spawn with **empty inventories**. Until you give them gear, they fight with
-fists — which is why the next step exists.
+The bot's inventory is **cleared on spawn**, so world settings that hand every new
+player a starting map no longer leave the bot holding it. Until you give gear it
+fights with fists — which is why the next step exists.
 
 ### 3.2 Gear
 
@@ -124,7 +127,8 @@ fists — which is why the next step exists.
 
 **Expected:** `Kit given to the nearest bot.` The bot now has a diamond sword,
 shield, 8 gapples, 16 pearls, 64 cobblestone, 16 golden carrots and full diamond
-armour.
+armour — **and the sword is visibly in its hand**, because the item is placed with
+`selectSlot: true` rather than only changing `selectedSlotIndex`.
 
 You can verify visually by looking at the bot, or run `/pvb:kit` twice and
 confirm it does not error.
@@ -203,7 +207,34 @@ learned layer can be removed without breaking anything.
 **Expected:** a visibly worse bot — slower reactions, wider aim error, fewer
 clicks per second.
 
-### 3.7 Grinding
+### 3.7 Mob targeting
+
+Spawn a bot with `/pvb:kit`, then spawn a zombie next to it (or stand near one).
+
+**Expected:** the bot turns and attacks the zombie. Hostile mobs are now valid
+targets; neutral mobs (endermen, slimes, wolves) are only attacked once they hit
+the bot first, and passive animals are never attacked.
+
+If it ignores the zombie → `dispositionOf` did not classify it, or
+`attackMobs` is off in the target policy.
+
+### 3.8 Debug nametags
+
+```
+/pvb:debug
+```
+
+**Expected:** every bot's nametag becomes `FIGHT/sword_trade Steve OK` — goal,
+tactic, target, governor tier. This is the fastest way to tell *why* a bot is
+doing nothing:
+
+| Nametag shows | Meaning |
+|---|---|
+| `IDLE/- -` | no target found — the bot sees nothing to fight |
+| `FIGHT/... ` but not moving | control layer problem, run the gametests |
+| `... DEGRADE` | the governor is throttling; too much load |
+
+### 3.9 Grinding
 
 Spawn a bot with no target nearby and stand next to some stone or ore.
 
@@ -214,7 +245,7 @@ or use a protected area. The bot should try, fail, retry once, and then stop
 trying that block type. If it keeps hammering the same block forever, the
 `NEEDS_RETRY` → `UNBREAKABLE` transition is broken.
 
-### 3.8 Chat
+### 3.10 Chat
 
 Let the bot fight you down to low health.
 
@@ -227,13 +258,21 @@ bug.
 
 ---
 
-## 4. Cleanup
+## 4. Commands reference
 
-```
-/pvb:clear
-```
+| Command | Effect |
+|---|---|
+| `/pvb:spawn [easy\|normal\|hard\|pro]` | spawn a bot at your feet |
+| `/pvb:kit` | give the nearest bot a full kit and put the sword in its hand |
+| `/pvb:remove` | disconnect the nearest bot |
+| `/pvb:respawn` | respawn the nearest bot at your position |
+| `/pvb:debug` | toggle status nametags |
+| `/pvb:trust` | show the trust table |
+| `/pvb:pro [preset]` | pro-level GUI, or apply a preset |
+| `/pvb:info` | bot count and governor tier |
+| `/pvb:clear` | remove every bot |
 
-**Expected:** `Removed N bot(s).` and `/pvb:info` reports `Bots: 0`.
+Bots also remove themselves from the registry when they die.
 
 ---
 
@@ -241,7 +280,9 @@ bug.
 
 | Looks wrong | Why it is correct |
 |---|---|
-| Bot fights with fists | it spawns with no inventory — run `/pvb:kit` |
+| Bot fights with fists | it spawns with an empty inventory — run `/pvb:kit` |
+| Bot ignores animals | passive mobs are never targeted by design |
+| Bot ignores an enderman until it hits back | neutral mobs are only targeted once provoked |
 | Bot ignores you when your trust is above 40 | trusted targets score `FIGHT = 0` by design |
 | Bot does not chase far | it only targets players within the governor's snapshot radius (24 blocks normally, 10 when throttled) |
 | Chat is rare | three cooldown tiers plus a chance roll per trigger |

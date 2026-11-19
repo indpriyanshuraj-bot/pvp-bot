@@ -3,7 +3,7 @@
  * and action methods. Skills express intent; this translates and rate-limits.
  */
 
-import { system, type Entity, type Vector3 } from '@minecraft/server';
+import { EquipmentSlot, system, type Entity, type ItemStack, type Vector3 } from '@minecraft/server';
 import type { SimulatedPlayer } from '@minecraft/server-gametest';
 
 export interface InputOptions {
@@ -54,15 +54,28 @@ export class Input {
 	}
 
 	// ── movement ──────────────────────────────────────────────────────────────
-	move(forward: number, strafe = 0): boolean {
+	/**
+	 * moveRelative(leftRight, backwardForward, speed) — only TWO movement axes.
+	 * Passing a third movement value silently becomes the speed scalar, which is
+	 * what made bots strafe without ever walking forward.
+	 */
+	move(forward: number, strafe = 0, speed = 1): boolean {
 		const f = clamp(fwd(forward), -1, 1);
 		const s = clamp(fwd(strafe), -1, 1);
-		if (f === 0 && s === 0) return this.guard(() => this.bot.moveRelative(0, 0, 0));
-		return this.guard(() => this.bot.moveRelative(s, 0, f));
+		const sp = clamp(fwd(speed), 0, 1);
+		if (f === 0 && s === 0) return this.guard(() => this.bot.stopMoving());
+		return this.guard(() => this.bot.moveRelative(s, f, sp));
 	}
 
 	stop(): boolean {
 		return this.guard(() => this.bot.stopMoving());
+	}
+
+	/** Engine pathfinding — far more reliable than raw steering over distance. */
+	navigate(location: Vector3, speed = 1): boolean {
+		return this.guard(() => {
+			this.bot.navigateToLocation(location, speed);
+		});
 	}
 
 	jump(): boolean {
@@ -112,6 +125,36 @@ export class Input {
 	select(slot: number): boolean {
 		return this.guard(() => {
 			this.bot.selectedSlotIndex = slot;
+		});
+	}
+
+	/**
+	 * Put an item in a hotbar slot and select it. `selectSlot: true` is what makes
+	 * the held-item model update — setting selectedSlotIndex alone can leave the
+	 * bot visibly holding the old item (e.g. a map it spawned with).
+	 */
+	give(stack: ItemStack, slot: number, selectSlot = false): boolean {
+		return this.guard(() => {
+			this.bot.setItem(stack, slot, selectSlot);
+		});
+	}
+
+	/** Wipe the whole inventory, including armour and offhand. */
+	clearInventory(): boolean {
+		return this.guard(() => {
+			const inv = this.bot.getComponent('minecraft:inventory');
+			inv?.container?.clearAll();
+			const eq = this.bot.getComponent('minecraft:equippable');
+			if (eq) {
+				for (const s of [EquipmentSlot.Head, EquipmentSlot.Chest, EquipmentSlot.Legs, EquipmentSlot.Feet, EquipmentSlot.Offhand]) {
+					try {
+						eq.setEquipment(s, undefined);
+					} catch {
+						/* slot unsupported */
+					}
+				}
+			}
+			this.bot.selectedSlotIndex = 0;
 		});
 	}
 
