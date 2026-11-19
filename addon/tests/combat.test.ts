@@ -173,3 +173,54 @@ test('combat intent always aims at the target', () => {
 	assert.ok(i.lookAt);
 	assert.equal(i.lookAt?.x, 9);
 });
+
+// ── executor awareness ───────────────────────────────────────────────────────
+test('a tactic with no executor is never selected, even when affordable', () => {
+	const c = caps({
+		utility: { ...caps().utility, crystal: 8, obsidian: 12 },
+		melee: { ...caps().melee, sword: 0 },
+		bestWeapon: null,
+	});
+	const scores = scoreTactics(tctx({ caps: c }));
+	const crystal = scores.find((s) => s.tactic === 'crystal_pvp');
+	assert.equal(crystal?.affordable, true, 'requirements are met');
+	assert.equal(crystal?.executable, false, 'but there is no executor');
+	assert.equal(selectTactic(tctx({ caps: c })), null, 'so nothing is selected');
+});
+
+test('implemented tactics report executable true', () => {
+	const scores = scoreTactics(tctx());
+	assert.equal(scores.find((s) => s.tactic === 'sword_trade')?.executable, true);
+	assert.equal(scores.find((s) => s.tactic === 'pearl_in')?.executable, true);
+});
+
+test('a pearl tactic selects the pearl slot', () => {
+	const c = caps({ utility: { ...caps().utility, pearl: 4 } });
+	const i = planCombat({
+		bot: bot({ items: [{ slot: 6, typeId: 'minecraft:ender_pearl', amount: 4, durability: 1 }] }),
+		target: target({ distance: 9 }), caps: c,
+		pro: resolvePro(DEFAULT_PRO), tactic: 'pearl_in', nowTick: 100, lastAttackTick: -100,
+	});
+	assert.equal(i.switchSlot, 6);
+	assert.equal(i.useSlot, 6);
+	assert.equal(i.attack, false);
+});
+
+test('a bow tactic selects the bow slot', () => {
+	const c = caps({ ranged: { bow: 1, crossbow: 0, arrows: 32 } });
+	const i = planCombat({
+		bot: bot({ items: [{ slot: 2, typeId: 'minecraft:bow', amount: 1, durability: 1 }] }),
+		target: target({ distance: 12 }), caps: c,
+		pro: resolvePro(DEFAULT_PRO), tactic: 'bow_pressure', nowTick: 100, lastAttackTick: -100,
+	});
+	assert.equal(i.useSlot, 2);
+});
+
+test('shield_hold never swings', () => {
+	const i = planCombat({
+		bot: bot(), target: target({ distance: 2 }), caps: caps(),
+		pro: resolvePro(DEFAULT_PRO), tactic: 'shield_hold', nowTick: 100, lastAttackTick: -100,
+	});
+	assert.equal(i.attack, false);
+	assert.equal(i.shield, true);
+});

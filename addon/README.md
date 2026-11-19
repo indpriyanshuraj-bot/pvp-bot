@@ -95,8 +95,9 @@ Phases 0–3 are built:
 - **social**: trust model with accident-vs-pattern hit handling, betrayal estimate,
   archetype observer (L2 is now live), and fact-filled rate-limited chat
 
-Not yet built: container/shulker execution (the gate is decided, the block
-placement is not), and inbound chat (reading `chatSend` needs the beta module).
+Remaining: executors for `crystal_pvp`, `anchor_pvp` and `bed_bomb` (gated off
+rather than half-implemented), and autonomous shulker use during a fight (the
+`/pvb:shulker` command exists; the bot does not yet decide to do it alone).
 
 ### Trust, and why a light bump is not betrayal
 

@@ -4,6 +4,7 @@ import {
 	CommandPermissionLevel,
 	CustomCommandParamType,
 	CustomCommandStatus,
+	Direction,
 	EquipmentSlot,
 	GameMode,
 	ItemStack,
@@ -15,6 +16,7 @@ import { spawnSimulatedPlayer } from '@minecraft/server-gametest';
 import { registry } from '../engine/registry.js';
 import { loadPro, openProMenu, applyPreset } from './pro.js';
 import { planStash } from '../skills/inventory.js';
+import { isShulker, planShulkerPlacement, placementIsSafe } from '../skills/container.js';
 import { PRO_PRESETS } from '../core/pro.js';
 
 let registered = false;
@@ -275,6 +277,73 @@ export function registerCommands(): void {
 					} catch (err) {
 						if ('sendMessage' in src) (src as Player).sendMessage(`§cStash failed: ${String(err)}`);
 					}
+				});
+				return { status: CustomCommandStatus.Success };
+			},
+		);
+
+		reg.registerCommand(
+			{
+				name: 'pvb:shulker',
+				description: 'Full shulker cycle for the nearest bot: place, stow, break',
+				permissionLevel: CommandPermissionLevel.GameDirectors,
+				cheatsRequired: true,
+				optionalParameters: [],
+			},
+			(origin) => {
+				const src = origin.sourceEntity;
+				if (!src) return { status: CustomCommandStatus.Failure };
+				const say = (m: string): void => {
+					if ('sendMessage' in src) (src as Player).sendMessage(m);
+				};
+				system.run(() => {
+					const bot = registry.nearestTo(src.location);
+					if (!bot) return say('§cNo bot nearby.');
+					const view = bot.view;
+					if (!view) return say('§cBot has no snapshot yet — try again in a second.');
+
+					const shulker = view.items.find((i) => isShulker(i.typeId));
+					if (!shulker) return say('§cBot is not carrying a shulker box.');
+
+					const plan = planShulkerPlacement(bot.entity.location, bot.entity.getViewDirection());
+					if (!placementIsSafe(plan, bot.entity.location)) return say('§cUnsafe placement spot.');
+
+					try {
+						bot.input.lookAt(plan.groundAt);
+						bot.entity.useItemInSlotOnBlock(shulker.slot, plan.groundAt, Direction.Up);
+					} catch (err) {
+						return say(`§cPlacement failed: ${String(err)}`);
+					}
+
+					system.runTimeout(() => {
+						if (!bot.entity.isValid) return;
+						try {
+							const block = bot.entity.dimension.getBlock(plan.placeAt);
+							const cont = block?.getComponent('minecraft:inventory')?.container;
+							if (!cont) return say('§cShulker did not appear — placement rejected.');
+
+							const inv = bot.entity.getComponent('minecraft:inventory')?.container;
+							let moved = 0;
+							for (const slot of planStash(view.items)) {
+								const stack = inv?.getItem(slot);
+								if (!stack) continue;
+								const leftover = cont.addItem(stack);
+								if (!leftover) {
+									inv?.setItem(slot, undefined);
+									moved++;
+								}
+							}
+							// put it back in the bot's hands
+							try {
+								bot.entity.breakBlock(plan.placeAt);
+							} catch {
+								/* break refused */
+							}
+							say(`§aShulker cycle done — stowed §f${moved}§a stack(s).`);
+						} catch (err) {
+							say(`§cShulker cycle failed: ${String(err)}`);
+						}
+					}, 4);
 				});
 				return { status: CustomCommandStatus.Success };
 			},

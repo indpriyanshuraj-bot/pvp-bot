@@ -19,6 +19,8 @@ interface TacticDef {
 	risk: number;
 	cost: string;
 	skill: string;
+	/** false when no executor exists yet — such a tactic is never selected */
+	executed?: boolean;
 }
 
 const DEFS = TACTICS as unknown as Record<string, TacticDef>;
@@ -88,7 +90,10 @@ export interface TacticScore {
 	utility: number;
 	base: number;
 	risk: number;
+	/** requirements, dimension and water/rain all satisfied */
 	affordable: boolean;
+	/** an executor exists in code for this tactic */
+	executable: boolean;
 }
 
 /**
@@ -103,6 +108,10 @@ export function skillMod(opponentSkill: number, risk: number): number {
 export function scoreTactics(ctx: TacticContext): TacticScore[] {
 	const out: TacticScore[] = [];
 	for (const [tactic, def] of Object.entries(DEFS)) {
+		// Two independent questions: can we do this at all, and does code exist?
+		// Keeping them separate means the dimension/requirement gates stay testable
+		// even for tactics that are not implemented yet.
+		const executable = def.executed !== false;
 		const reqOk = (def.requires ?? []).every((r) => meetsRequirement(r, ctx.caps));
 		const dimOk = !def.dimension || def.dimension.includes(ctx.dimension);
 		const waterOk = !def.needsWater || ctx.inWater || ctx.isRaining;
@@ -113,15 +122,18 @@ export function scoreTactics(ctx: TacticContext): TacticScore[] {
 		const l3 = clamp(ctx.learned(tactic), -1, 1);
 		const utility = combineUtility(def.base, ctx.pro, l1, l2, l3);
 
-		out.push({ tactic, utility, base: def.base, risk: def.risk, affordable });
+		out.push({ tactic, utility, base: def.base, risk: def.risk, affordable, executable });
 	}
 	return out.sort((a, b) => b.utility - a.utility);
 }
 
-/** Best affordable tactic, or null when nothing is possible. */
+/**
+ * Best tactic that is both affordable and implemented. A tactic with no executor
+ * is skipped rather than chosen and silently falling through to a generic swing.
+ */
 export function selectTactic(ctx: TacticContext): string | null {
 	for (const s of scoreTactics(ctx)) {
-		if (s.affordable) return s.tactic;
+		if (s.affordable && s.executable) return s.tactic;
 	}
 	return null;
 }
@@ -151,6 +163,14 @@ export function canCrit(bot: BotView): boolean {
 	return !bot.onGround && bot.velocityY < 0;
 }
 
+/** First slot whose typeId matches. */
+function slotOf(bot: BotView, pred: (typeId: string) => boolean): number | null {
+	for (const i of bot.items) {
+		if (pred(i.typeId) && i.amount > 0) return i.slot;
+	}
+	return null;
+}
+
 export function planCombat(ctx: CombatContext): CombatIntent {
 	const reach = ctx.caps.bestWeapon?.reach ?? 3;
 	const inReach = ctx.target.distance <= reach + 0.35;
@@ -166,7 +186,7 @@ export function planCombat(ctx: CombatContext): CombatIntent {
 			)
 		: planApproach(ctx.bot, ctx.target, reach);
 
-	return {
+	const base: CombatIntent = {
 		attack: inReach && ready,
 		lookAt: targetPoint(ctx.bot, ctx.target),
 		move,
@@ -174,6 +194,29 @@ export function planCombat(ctx: CombatContext): CombatIntent {
 		useSlot: null,
 		shield: ctx.tactic === 'shield_hold',
 	};
+
+	// Tactics that act through an item rather than a swing.
+	switch (ctx.tactic) {
+		case 'pearl_in': {
+			const slot = slotOf(ctx.bot, (t) => t === 'minecraft:ender_pearl');
+			if (slot !== null) return { ...base, switchSlot: slot, useSlot: slot, attack: false };
+			return base;
+		}
+		case 'bow_pressure': {
+			const slot = slotOf(ctx.bot, (t) => t === 'minecraft:bow' || t === 'minecraft:crossbow');
+			if (slot !== null) return { ...base, switchSlot: slot, useSlot: slot, attack: false };
+			return base;
+		}
+		case 'riptide': {
+			const slot = slotOf(ctx.bot, (t) => t === 'minecraft:trident');
+			if (slot !== null) return { ...base, switchSlot: slot, attack: false };
+			return base;
+		}
+		case 'shield_hold':
+			return { ...base, attack: false, shield: true };
+		default:
+			return base;
+	}
 }
 
 function clamp(v: number, lo: number, hi: number): number {

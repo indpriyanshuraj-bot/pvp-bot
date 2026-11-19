@@ -295,7 +295,40 @@ Fill the bot's main inventory (slots 9+) by giving it items, then:
 **Expected:** `Stowed N stack(s) into the bot's ender chest.` Its hotbar is
 untouched — the sword stays in its hand.
 
-### 3.14 Chat
+### 3.14 Shulker cycle
+
+Give the bot a shulker box (drop it near the bot, or use `/give`), then:
+
+```
+/pvb:shulker
+```
+
+**Expected:** `Shulker cycle done — stowed N stack(s).` The bot places the box in
+front of itself, moves its main-inventory overflow in, and breaks the box again.
+
+Failure messages name the cause: *no shulker*, *unsafe placement*, *shulker did
+not appear*. That last one means the engine rejected the placement — usually the
+ground block is not solid.
+
+### 3.15 Which tactics actually run
+
+Tactic selection only ever picks a tactic that has an executor. Today:
+
+| Tactic | Runs? |
+|---|---|
+| `sword_trade`, `axe_shieldbreak`, `mace_smash` | yes — swing |
+| `shield_hold` | yes — raises the shield, never swings |
+| `bow_pressure` | yes — selects the bow and draws |
+| `pearl_in` | yes — selects and throws a pearl |
+| `riptide` | yes — selects the trident |
+| `crystal_pvp`, `anchor_pvp`, `bed_bomb` | **no** — scored but never chosen |
+
+Those three are gated off deliberately: their requirements are still evaluated (so
+the dimension and item gates stay testable), but `executable: false` in
+`data/tactics.json` stops them being selected. A bot given crystals will fall back
+to sword work rather than picking a plan it cannot carry out.
+
+### 3.16 Chat
 
 Let the bot fight you down to low health.
 
@@ -318,6 +351,7 @@ bug.
 | `/pvb:respawn` | respawn the nearest bot at your position |
 | `/pvb:debug` | toggle status nametags |
 | `/pvb:stash` | stow the nearest bot's overflow into its ender chest |
+| `/pvb:shulker` | full shulker cycle: place, stow, break, pick back up |
 | `/pvb:trust` | show the trust table |
 | `/pvb:pro [preset]` | pro-level GUI, or apply a preset |
 | `/pvb:info` | bot count and governor tier |

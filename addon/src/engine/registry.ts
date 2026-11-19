@@ -151,6 +151,8 @@ class Registry {
 				if (state) {
 					state.lastAttackerId = attacker.id;
 					state.lastAttackerTick = system.currentTick;
+					// L2 needs to see how often this opponent actually swings
+					state.observer.recordAttack();
 				}
 			});
 			world.afterEvents.entityDie.subscribe((ev) => {
